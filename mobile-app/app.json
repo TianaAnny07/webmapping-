@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "Santé Madagascar",
+    "slug": "madagascar-health-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#0d2030"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "L'application utilise votre position pour trouver les établissements de santé les plus proches et vous guider jusqu'à eux."
+      }
+    },
+    "android": {
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "VOTRE_CLE_GOOGLE_MAPS"
+        }
+      }
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Autoriser l'application à utiliser votre position pour vous localiser sur la carte et calculer un itinéraire."
+        }
+      ],
+      "expo-font"
+    ]
+  }
+}

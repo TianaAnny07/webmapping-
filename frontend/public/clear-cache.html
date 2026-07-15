@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vider le cache</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+        button {
+            background: #6DBE45;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        button:hover {
+            background: #5AA336;
+        }
+        .success {
+            color: #6DBE45;
+            font-weight: bold;
+            margin-top: 20px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧹 Nettoyage du cache</h1>
+        <p>Cliquez sur le bouton pour vider le localStorage</p>
+        <button onclick="clearStorage()">Vider le localStorage</button>
+        <button onclick="goToRegister()">Aller à la page d'inscription</button>
+        <p class="success" id="success">✅ localStorage vidé avec succès !</p>
+    </div>
+
+    <script>
+        function clearStorage() {
+            localStorage.clear();
+            sessionStorage.clear();
+            document.getElementById('success').style.display = 'block';
+            console.log('localStorage et sessionStorage vidés !');
+        }
+
+        function goToRegister() {
+            window.location.href = 'http://localhost:3002/register';
+        }
+
+        // Afficher ce qui est dans le localStorage
+        console.log('Contenu actuel du localStorage:', localStorage);
+    </script>
+</body>
+</html>

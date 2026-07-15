@@ -1,0 +1,20 @@
+.theme-toggle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid #6DBE45;
+  background: transparent;
+  color: #6DBE45;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  flex-shrink: 0;
+}
+
+.theme-toggle:hover {
+  background: #6DBE45;
+  color: #ffffff;
+  transform: rotate(20deg);
+}
