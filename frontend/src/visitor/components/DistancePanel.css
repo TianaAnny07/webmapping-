@@ -1,0 +1,96 @@
+.distance-panel {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 4px 14px var(--shadow);
+  width: 100%;
+  max-width: 320px;
+  font-size: 13px;
+}
+ 
+.distance-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+ 
+.distance-panel__close {
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  opacity: 0.6;
+}
+.distance-panel__close:hover { opacity: 1; }
+ 
+.distance-panel__status {
+  margin: 0 0 10px;
+  opacity: 0.8;
+}
+ 
+.distance-panel__result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-input);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+.distance-panel__result--route { border-left: 3px solid var(--accent); }
+.distance-panel__result i { color: var(--accent); }
+ 
+.distance-panel__modes {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.distance-panel__modes button {
+  flex: 1;
+  border: 1px solid var(--border, rgba(0,0,0,0.1));
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border-radius: 8px;
+  padding: 6px 4px;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.distance-panel__modes button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.distance-panel__modes button:disabled { opacity: 0.5; cursor: not-allowed; }
+ 
+.distance-panel__loading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0.8;
+  margin: 6px 0;
+}
+ 
+.distance-panel__error {
+  color: #ef4444;
+  margin: 6px 0;
+}
+ 
+.distance-panel__reset {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  opacity: 0.7;
+  padding: 6px 0 0;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.distance-panel__reset:hover { opacity: 1; }
+ 

@@ -118,7 +118,7 @@
 // export default VisitorMap;
 
 import React, { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import 'react-leaflet-cluster/dist/assets/MarkerCluster.css';
 import 'react-leaflet-cluster/dist/assets/MarkerCluster.Default.css';
@@ -128,14 +128,14 @@ import config from '../../config';
 import { getCustomIcon } from '../utils/facilityDisplay';
 import { bearingDeg, nearestRouteIndex } from '../utils/geo';
 import { travelIconSvg } from '../utils/travelIcons';
-
+ 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png'),
   iconUrl: require('leaflet/dist/images/marker-icon.png'),
   shadowUrl: require('leaflet/dist/images/marker-shadow.png'),
 });
-
+ 
 const userIcon = L.divIcon({
   className: '',
   html: `<div style="
@@ -146,13 +146,37 @@ const userIcon = L.divIcon({
   iconSize: [18, 18],
   iconAnchor: [9, 9],
 });
-
+ 
+/** Icônes des points A / B utilisés pour la mesure de distance manuelle
+ * (aucun rapport avec la position GPS de l'utilisateur). */
+function buildMeasurePointIcon(label, color) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="
+        width: 26px; height: 26px; border-radius: 50% 50% 50% 0;
+        background: ${color}; border: 2px solid white;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+        transform: rotate(-45deg);
+        display: flex; align-items: center; justify-content: center;
+      ">
+        <span style="
+          transform: rotate(45deg);
+          color: white; font-weight: 700; font-size: 12px; font-family: sans-serif;
+        ">${label}</span>
+      </div>`,
+    iconSize: [26, 26],
+    iconAnchor: [13, 26],
+  });
+}
+const pointAIcon = buildMeasurePointIcon('A', '#f59e0b');
+const pointBIcon = buildMeasurePointIcon('B', '#8b5cf6');
+ 
 /** Icône illustrative (piéton / moto / voiture) orientée dans la direction du trajet. */
 function buildNavigatingIcon(mode, rotationDeg) {
   const svg = travelIconSvg(mode) || travelIconSvg('driving');
   const size = 40;
   const rotation = mode === 'walking' ? 0 : rotationDeg;
-
+ 
   return L.divIcon({
     className: '',
     html: `
@@ -170,14 +194,14 @@ function buildNavigatingIcon(mode, rotationDeg) {
     iconAnchor: [size / 2, size / 2],
   });
 }
-
+ 
 // Par défaut, Leaflet ne dessine le tracé qu'un peu au-delà de l'écran
 // visible ("clipPadding" ~10%). Sur un long itinéraire, zoomer fait donc
 // disparaître le bout du tracé hors champ tant qu'on n'a pas pané dessus.
 // On agrandit largement cette marge pour que le chemin reste bien tracé
 // même en zoomant fort.
 const routeRenderer = L.svg({ padding: 4 });
-
+ 
 function FlyTo({ coords, zoom }) {
   const map = useMap();
   useEffect(() => {
@@ -185,8 +209,35 @@ function FlyTo({ coords, zoom }) {
   }, [coords, zoom, map]);
   return null;
 }
-
-function VisitorMap({ facilities, userPosition, selectedFacility, onSelectFacility, flyTo, route, highlightedIds }) {
+ 
+/**
+ * Capture les clics sur la carte lorsque le mode "mesure de distance" est
+ * actif. Complètement indépendant de la géolocalisation : on récupère
+ * simplement les coordonnées du point cliqué (e.latlng).
+ */
+function MeasureClickCapture({ active, onMapClick }) {
+  useMapEvents({
+    click(e) {
+      if (active) onMapClick([e.latlng.lat, e.latlng.lng]);
+    },
+  });
+  return null;
+}
+ 
+function VisitorMap({
+  facilities,
+  userPosition,
+  selectedFacility,
+  onSelectFacility,
+  flyTo,
+  route,
+  highlightedIds,
+  // --- props pour la mesure de distance entre deux points cliqués ---
+  measureActive,
+  onMeasureClick,
+  measurePointA,
+  measurePointB,
+}) {
   let userMarkerIcon = userIcon;
   if (route?.active && userPosition && route.geometry?.length > 1) {
     const idx = nearestRouteIndex(userPosition[0], userPosition[1], route.geometry);
@@ -195,15 +246,22 @@ function VisitorMap({ facilities, userPosition, selectedFacility, onSelectFacili
     const rotation = bearingDeg(userPosition[0], userPosition[1], nLat, nLon);
     userMarkerIcon = buildNavigatingIcon(route.mode, rotation);
   }
-
+ 
   return (
-    <MapContainer center={[-18.9249, 47.5185]} zoom={6} style={{ height: '100%', width: '100%' }} renderer={routeRenderer}>
+    <MapContainer
+      center={[-18.9249, 47.5185]}
+      zoom={6}
+      style={{ height: '100%', width: '100%', cursor: measureActive ? 'crosshair' : '' }}
+      renderer={routeRenderer}
+    >
       <TileLayer url={config.MAP_TILE_URL} attribution="&copy; OpenStreetMap contributors" />
-
+ 
       {flyTo && <FlyTo coords={flyTo.coords} zoom={flyTo.zoom} />}
-
+ 
+      <MeasureClickCapture active={measureActive} onMapClick={onMeasureClick} />
+ 
       {userPosition && <Marker position={userPosition} icon={userMarkerIcon} />}
-
+ 
       {route && route.geometry && (
         <>
           {/* Contour blanc en dessous : le tracé reste net et lisible sur n'importe quel fond de carte */}
@@ -230,7 +288,17 @@ function VisitorMap({ facilities, userPosition, selectedFacility, onSelectFacili
           />
         </>
       )}
-
+ 
+      {/* Points A / B et trait "à vol d'oiseau" de la mesure de distance manuelle */}
+      {measurePointA && measurePointB && (
+        <Polyline
+          positions={[measurePointA, measurePointB]}
+          pathOptions={{ color: '#f59e0b', weight: 3, dashArray: '4 8', opacity: 0.9 }}
+        />
+      )}
+      {measurePointA && <Marker position={measurePointA} icon={pointAIcon} />}
+      {measurePointB && <Marker position={measurePointB} icon={pointBIcon} />}
+ 
       <MarkerClusterGroup chunkedLoading maxClusterRadius={55}>
         {facilities.map((feature) => {
           const [lon, lat] = feature.geometry.coordinates;
@@ -251,5 +319,6 @@ function VisitorMap({ facilities, userPosition, selectedFacility, onSelectFacili
     </MapContainer>
   );
 }
-
+ 
 export default VisitorMap;
+ 

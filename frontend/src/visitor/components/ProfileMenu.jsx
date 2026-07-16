@@ -12,6 +12,9 @@ import { useTheme } from '../../context/ThemeContext';
 function ProfileMenu({ onClose, onUpdate, onLogout }) {
   const [view, setView] = useState('menu'); // 'menu' | 'profile' | 'settings'
   const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState('');
+  const [reloadTick, setReloadTick] = useState(0);
   const [username, setUsername] = useState('');
   const [avatar, setAvatar] = useState(null);
   const [password, setPassword] = useState('');
@@ -22,19 +25,47 @@ function ProfileMenu({ onClose, onUpdate, onLogout }) {
   const wrapRef = useRef();
   const { isDark, toggleTheme } = useTheme();
 
+  // Charge le profil UNE SEULE FOIS (ou quand on clique "Réessayer") —
+  // séparé du listener ci-dessous pour ne pas relancer l'appel API à
+  // chaque re-rendu du parent.
   useEffect(() => {
-    api.get('/auth/profile').then((res) => {
-      setProfile(res.data);
-      setUsername(res.data.username || '');
-      setAvatar(res.data.avatar || null);
-    });
+    let cancelled = false;
+    setLoading(true);
+    setFetchError('');
+    api
+      .get('/auth/profile')
+      .then((res) => {
+        if (cancelled) return;
+        setProfile(res.data);
+        setUsername(res.data.username || '');
+        setAvatar(res.data.avatar || null);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setFetchError(
+          err.response?.status === 401
+            ? 'Session expirée, reconnectez-vous.'
+            : "Impossible de charger le profil. Vérifiez que le serveur backend tourne bien."
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadTick]);
 
+  // Ferme le menu si on clique en dehors (uniquement actif en vue "menu").
+  useEffect(() => {
     const handleClickOutside = (e) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) onClose();
+      if (view === 'menu' && wrapRef.current && !wrapRef.current.contains(e.target)) {
+        onClose();
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [onClose]);
+  }, [onClose, view]);
 
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
@@ -69,6 +100,32 @@ function ProfileMenu({ onClose, onUpdate, onLogout }) {
       setSaving(false);
     }
   };
+
+  // ===== CHARGEMENT =====
+  if (loading) {
+    return (
+      <div ref={wrapRef} className="profile-dropdown">
+        <div className="profile-dropdown__loading">
+          <i className="bi bi-arrow-repeat spin"></i> Chargement du profil…
+        </div>
+      </div>
+    );
+  }
+
+  // ===== ERREUR (au lieu de rester invisible) =====
+  if (fetchError) {
+    return (
+      <div ref={wrapRef} className="profile-dropdown">
+        <div className="profile-dropdown__loading profile-dropdown__loading--error">
+          <i className="bi bi-exclamation-triangle-fill"></i>
+          <span>{fetchError}</span>
+          <button className="profile-dropdown__retry" onClick={() => setReloadTick((t) => t + 1)}>
+            Réessayer
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!profile) return null;
 
@@ -116,25 +173,29 @@ function ProfileMenu({ onClose, onUpdate, onLogout }) {
           </button>
         </div>
 
+        <div className="profile-modal__avatar-section">
+          <div className="profile-modal__avatar" onClick={() => fileRef.current.click()}>
+            {avatar ? <img src={avatar} alt="avatar" /> : <i className="bi bi-person-fill"></i>}
+            <span className="profile-modal__avatar-edit">
+              <i className="bi bi-camera-fill"></i>
+            </span>
+          </div>
+          <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarChange} />
+          <div className="profile-modal__identity">
+            <div className="profile-modal__identity-name">{profile.username || '—'}</div>
+            <div className="profile-modal__identity-email">{profile.email}</div>
+            <div className="profile-modal__role-badge">{profile.role === 'admin' ? 'Administrateur' : 'Visiteur'}</div>
+          </div>
+        </div>
+
+        {error && (
+          <div className="profile-modal__error">
+            <i className="bi bi-exclamation-circle"></i> {error}
+          </div>
+        )}
+
         {view === 'profile' && (
           <>
-            <div className="profile-modal__avatar-section">
-              <div className="profile-modal__avatar" onClick={() => fileRef.current.click()}>
-                {avatar ? <img src={avatar} alt="avatar" /> : <i className="bi bi-person-fill"></i>}
-                <span className="profile-modal__avatar-edit">
-                  <i className="bi bi-camera-fill"></i>
-                </span>
-              </div>
-              <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarChange} />
-              <div className="profile-modal__role-badge">{profile.role === 'admin' ? 'Administrateur' : 'Visiteur'}</div>
-            </div>
-
-            {error && (
-              <div className="profile-modal__error">
-                <i className="bi bi-exclamation-circle"></i> {error}
-              </div>
-            )}
-
             <div className="profile-modal__field">
               <label>Nom d'utilisateur</label>
               <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Votre nom" />
@@ -156,12 +217,6 @@ function ProfileMenu({ onClose, onUpdate, onLogout }) {
 
         {view === 'settings' && (
           <>
-            {error && (
-              <div className="profile-modal__error">
-                <i className="bi bi-exclamation-circle"></i> {error}
-              </div>
-            )}
-
             <div className="profile-modal__settings-row">
               <div>
                 <div className="profile-modal__settings-title">Thème de l'application</div>
