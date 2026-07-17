@@ -78,6 +78,15 @@ function ListeDonnees({ facilities, onRefresh }) {
     }
   };
 
+  const s = {
+    textSecondary: { color: 'var(--text-secondary)' },
+    textPrimary: { color: 'var(--text-primary)' },
+    border: { border: '1px solid var(--border-color)' },
+    bgInput: { background: 'var(--bg-input)' },
+    bgCard: { background: 'var(--bg-card)' },
+    borderRadius: { borderRadius: '8px' },
+  };
+
   return (
     <div className="dash-section-box">
       <h2 className="dash-section-heading">
@@ -85,8 +94,8 @@ function ListeDonnees({ facilities, onRefresh }) {
       </h2>
 
       {/* Stats */}
-      <p style={{ color: '#888', marginBottom: '16px' }}>
-        <b style={{ color: '#1a1a2e' }}>{filtered.length}</b> résultats sur {facilities.length} formations sanitaires
+      <p style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>
+        <b style={{ color: 'var(--text-primary)' }}>{filtered.length}</b> résultats sur {facilities.length} formations sanitaires
       </p>
 
       {/* Message */}
@@ -105,19 +114,19 @@ function ListeDonnees({ facilities, onRefresh }) {
       <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: '8px',
-          background: '#f4f6f9', border: '1px solid #e0e0e0',
+          background: 'var(--bg-input)', border: '1px solid var(--border-color)',
           borderRadius: '8px', padding: '8px 12px', flex: 2
         }}>
-          <i className="bi bi-search" style={{ color: '#888' }}></i>
+          <i className="bi bi-search" style={{ color: 'var(--text-secondary)' }}></i>
           <input
             type="text"
             placeholder="Rechercher par nom, région, district..."
             value={search}
             onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
-            style={{ border: 'none', outline: 'none', background: 'transparent', width: '100%', fontSize: '13px' }}
+            style={{ border: 'none', outline: 'none', background: 'transparent', width: '100%', fontSize: '13px', color: 'var(--text-primary)' }}
           />
           {search && (
-            <i className="bi bi-x-circle" style={{ color: '#888', cursor: 'pointer' }} onClick={() => setSearch('')}></i>
+            <i className="bi bi-x-circle" style={{ color: 'var(--text-secondary)', cursor: 'pointer' }} onClick={() => setSearch('')}></i>
           )}
         </div>
 
@@ -125,9 +134,9 @@ function ListeDonnees({ facilities, onRefresh }) {
           value={filterType}
           onChange={e => { setFilterType(e.target.value); setCurrentPage(1); }}
           style={{
-            padding: '8px 12px', border: '1px solid #e0e0e0',
-            borderRadius: '8px', fontSize: '13px', background: '#f4f6f9',
-            color: '#1a1a2e', outline: 'none', flex: 1
+            padding: '8px 12px', border: '1px solid var(--border-color)',
+            borderRadius: '8px', fontSize: '13px', background: 'var(--bg-input)',
+            color: 'var(--text-primary)', outline: 'none', flex: 1
           }}
         >
           <option value="">Tous les types</option>
@@ -138,9 +147,9 @@ function ListeDonnees({ facilities, onRefresh }) {
           value={filterRegion}
           onChange={e => { setFilterRegion(e.target.value); setCurrentPage(1); }}
           style={{
-            padding: '8px 12px', border: '1px solid #e0e0e0',
-            borderRadius: '8px', fontSize: '13px', background: '#f4f6f9',
-            color: '#1a1a2e', outline: 'none', flex: 1
+            padding: '8px 12px', border: '1px solid var(--border-color)',
+            borderRadius: '8px', fontSize: '13px', background: 'var(--bg-input)',
+            color: 'var(--text-primary)', outline: 'none', flex: 1
           }}
         >
           <option value="">Toutes les régions</option>
@@ -169,9 +178,9 @@ function ListeDonnees({ facilities, onRefresh }) {
           display: 'flex', alignItems: 'center', justifyContent: 'center'
         }}>
           <div style={{
-            background: 'white', borderRadius: '12px',
+            background: 'var(--bg-card)', borderRadius: '12px',
             padding: '24px', width: '500px', maxHeight: '80vh',
-            overflowY: 'auto'
+            overflowY: 'auto', color: 'var(--text-primary)'
           }}>
             <h3 style={{ marginBottom: '16px' }}>
               <i className="bi bi-pencil-fill"></i> Modifier l'établissement
@@ -191,7 +200,7 @@ function ListeDonnees({ facilities, onRefresh }) {
               { label: 'Jours ouverture', key: 'openingDays' },
             ].map(field => (
               <div key={field.key} style={{ marginBottom: '12px' }}>
-                <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>
+                <label style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
                   {field.label}
                 </label>
                 <input
@@ -200,15 +209,16 @@ function ListeDonnees({ facilities, onRefresh }) {
                   onChange={e => setEditForm({ ...editForm, [field.key]: e.target.value })}
                   style={{
                     width: '100%', padding: '8px 12px',
-                    border: '1px solid #e0e0e0', borderRadius: '6px',
-                    fontSize: '13px', outline: 'none'
+                    border: '1px solid var(--border-color)', borderRadius: '6px',
+                    fontSize: '13px', outline: 'none',
+                    background: 'var(--bg-input)', color: 'var(--text-primary)'
                   }}
                 />
               </div>
             ))}
 
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ fontSize: '12px', color: '#888' }}>
+              <label style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                 <input
                   type="checkbox"
                   checked={editForm.is24h}
@@ -233,8 +243,8 @@ function ListeDonnees({ facilities, onRefresh }) {
               <button
                 onClick={() => setEditingFacility(null)}
                 style={{
-                  flex: 1, padding: '10px', background: '#f4f6f9',
-                  color: '#888', border: '1px solid #e0e0e0',
+                  flex: 1, padding: '10px', background: 'var(--bg-input)',
+                  color: 'var(--text-secondary)', border: '1px solid var(--border-color)',
                   borderRadius: '8px', cursor: 'pointer'
                 }}
               >
@@ -249,20 +259,20 @@ function ListeDonnees({ facilities, onRefresh }) {
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
           <thead>
-            <tr style={{ background: '#f4f6f9', textAlign: 'left' }}>
-              <th style={{ padding: '10px 12px', color: '#888' }}>#</th>
-              <th style={{ padding: '10px 12px', color: '#888' }}>Nom</th>
-              <th style={{ padding: '10px 12px', color: '#888' }}>Type</th>
-              <th style={{ padding: '10px 12px', color: '#888' }}>Région</th>
-              <th style={{ padding: '10px 12px', color: '#888' }}>District</th>
-              <th style={{ padding: '10px 12px', color: '#888' }}>Statut</th>
-              <th style={{ padding: '10px 12px', color: '#888' }}>Actions</th>
+            <tr style={{ background: 'var(--bg-input)', textAlign: 'left' }}>
+              <th style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>#</th>
+              <th style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>Nom</th>
+              <th style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>Type</th>
+              <th style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>Région</th>
+              <th style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>District</th>
+              <th style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>Statut</th>
+              <th style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {paginated.length === 0 ? (
               <tr>
-                <td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: '#888' }}>
+                <td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
                   <i className="bi bi-search" style={{ fontSize: '24px' }}></i>
                   <p style={{ marginTop: '8px' }}>Aucun résultat trouvé</p>
                 </td>
@@ -271,11 +281,11 @@ function ListeDonnees({ facilities, onRefresh }) {
               paginated.map((feature, index) => {
                 const props = feature.properties;
                 return (
-                  <tr key={index} style={{ borderBottom: '1px solid #f0f0f0' }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#fafafa'}
+                  <tr key={index} style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-input)'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
-                    <td style={{ padding: '10px 12px', color: '#888' }}>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>
                       {(currentPage - 1) * itemsPerPage + index + 1}
                     </td>
                     <td style={{ padding: '10px 12px' }}>{props.name || '—'}</td>
@@ -326,14 +336,15 @@ function ListeDonnees({ facilities, onRefresh }) {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', marginTop: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', marginTop: '20px', flexWrap: 'wrap' }}>
           <button
             onClick={() => setCurrentPage(1)}
             disabled={currentPage === 1}
             style={{
-              padding: '6px 12px', border: '1px solid #e0e0e0',
+              padding: '6px 12px', border: '1px solid var(--border-color)',
               borderRadius: '6px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-              background: currentPage === 1 ? '#f4f6f9' : 'white', color: currentPage === 1 ? '#ccc' : '#1a1a2e'
+              background: currentPage === 1 ? 'var(--bg-input)' : 'var(--bg-card)',
+              color: currentPage === 1 ? 'var(--text-secondary)' : 'var(--text-primary)'
             }}
           >
             <i className="bi bi-chevron-double-left"></i>
@@ -342,9 +353,10 @@ function ListeDonnees({ facilities, onRefresh }) {
             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
             disabled={currentPage === 1}
             style={{
-              padding: '6px 12px', border: '1px solid #e0e0e0',
+              padding: '6px 12px', border: '1px solid var(--border-color)',
               borderRadius: '6px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-              background: currentPage === 1 ? '#f4f6f9' : 'white', color: currentPage === 1 ? '#ccc' : '#1a1a2e'
+              background: currentPage === 1 ? 'var(--bg-input)' : 'var(--bg-card)',
+              color: currentPage === 1 ? 'var(--text-secondary)' : 'var(--text-primary)'
             }}
           >
             <i className="bi bi-chevron-left"></i>
@@ -357,10 +369,10 @@ function ListeDonnees({ facilities, onRefresh }) {
                 key={page}
                 onClick={() => setCurrentPage(page)}
                 style={{
-                  padding: '6px 12px', border: '1px solid #e0e0e0',
+                  padding: '6px 12px', border: '1px solid var(--border-color)',
                   borderRadius: '6px', cursor: 'pointer',
-                  background: currentPage === page ? '#6DBE45' : 'white',
-                  color: currentPage === page ? 'white' : '#1a1a2e',
+                  background: currentPage === page ? '#6DBE45' : 'var(--bg-card)',
+                  color: currentPage === page ? 'white' : 'var(--text-primary)',
                   fontWeight: currentPage === page ? 'bold' : 'normal'
                 }}
               >
@@ -373,10 +385,10 @@ function ListeDonnees({ facilities, onRefresh }) {
             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages}
             style={{
-              padding: '6px 12px', border: '1px solid #e0e0e0',
+              padding: '6px 12px', border: '1px solid var(--border-color)',
               borderRadius: '6px', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-              background: currentPage === totalPages ? '#f4f6f9' : 'white',
-              color: currentPage === totalPages ? '#ccc' : '#1a1a2e'
+              background: currentPage === totalPages ? 'var(--bg-input)' : 'var(--bg-card)',
+              color: currentPage === totalPages ? 'var(--text-secondary)' : 'var(--text-primary)'
             }}
           >
             <i className="bi bi-chevron-right"></i>
@@ -385,16 +397,16 @@ function ListeDonnees({ facilities, onRefresh }) {
             onClick={() => setCurrentPage(totalPages)}
             disabled={currentPage === totalPages}
             style={{
-              padding: '6px 12px', border: '1px solid #e0e0e0',
+              padding: '6px 12px', border: '1px solid var(--border-color)',
               borderRadius: '6px', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-              background: currentPage === totalPages ? '#f4f6f9' : 'white',
-              color: currentPage === totalPages ? '#ccc' : '#1a1a2e'
+              background: currentPage === totalPages ? 'var(--bg-input)' : 'var(--bg-card)',
+              color: currentPage === totalPages ? 'var(--text-secondary)' : 'var(--text-primary)'
             }}
           >
             <i className="bi bi-chevron-double-right"></i>
           </button>
 
-          <span style={{ fontSize: '13px', color: '#888', marginLeft: '8px' }}>
+          <span style={{ fontSize: '13px', color: 'var(--text-secondary)', marginLeft: '8px' }}>
             Page {currentPage} sur {totalPages} — {filtered.length} résultats
           </span>
         </div>

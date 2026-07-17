@@ -1,0 +1,180 @@
+/* src/pages/VisitorApp/components/VoiceGuide.css */
+
+.voice-guide {
+  position: relative;
+  background: var(--bg-card, #ffffff);
+  border-radius: 12px;
+  padding: 12px 16px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border-color, #e0e0e0);
+  transition: all 0.3s ease;
+  margin-bottom: 12px;
+}
+
+.voice-guide--active {
+  border-color: #6DBE45;
+  box-shadow: 0 2px 16px rgba(109, 190, 69, 0.2);
+}
+
+.voice-guide--unavailable {
+  opacity: 0.6;
+  color: #999;
+  cursor: not-allowed;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  padding: 8px 12px;
+}
+
+.voice-guide__controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.voice-guide__btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 8px;
+  background: var(--bg-secondary, #f5f5f5);
+  color: var(--text-primary, #333);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.voice-guide__btn:hover {
+  background: var(--bg-hover, #e8e8e8);
+  transform: translateY(-1px);
+}
+
+.voice-guide__btn--active {
+  background: #6DBE45;
+  color: white;
+}
+
+.voice-guide__btn--active:hover {
+  background: #5AA336;
+}
+
+.voice-guide__btn--mute.active {
+  background: #ff6b6b;
+  color: white;
+}
+
+.voice-guide__btn--mute.active:hover {
+  background: #e55555;
+}
+
+.voice-guide__btn--info {
+  background: #4a90d9;
+  color: white;
+}
+
+.voice-guide__btn--info:hover {
+  background: #3a7bc8;
+}
+
+.voice-guide__btn i {
+  font-size: 18px;
+}
+
+.voice-guide__btn-label {
+  font-size: 13px;
+}
+
+@media (max-width: 600px) {
+  .voice-guide__btn-label {
+    display: none;
+  }
+  
+  .voice-guide__btn {
+    padding: 8px 12px;
+  }
+}
+
+/* Status section */
+.voice-guide__status {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color, #e0e0e0);
+}
+
+.voice-guide__speaking {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #6DBE45;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.voice-guide__pulse {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  background: #6DBE45;
+  border-radius: 50%;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.5);
+    opacity: 0.5;
+  }
+}
+
+.voice-guide__waiting {
+  color: var(--text-secondary, #888);
+  font-size: 13px;
+}
+
+.voice-guide__current-step {
+  margin-top: 6px;
+  padding: 8px 12px;
+  background: var(--bg-highlight, #f8f9fa);
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.voice-guide__step-number {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6DBE45;
+  margin-right: 8px;
+  padding: 2px 8px;
+  background: rgba(109, 190, 69, 0.1);
+  border-radius: 4px;
+}
+
+.voice-guide__step-text {
+  color: var(--text-primary, #333);
+}
+
+/* Progress bar */
+.voice-guide__progress {
+  margin-top: 8px;
+  height: 3px;
+  background: var(--bg-secondary, #e0e0e0);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.voice-guide__progress-bar {
+  height: 100%;
+  background: #6DBE45;
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}

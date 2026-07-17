@@ -1,14 +1,10 @@
+// src/visitor/components/ProfileMenu.jsx
+
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
 
-/**
- * Menu profil visiteur, calqué sur celui de l'admin :
- * - un petit menu déroulant (nom + email + 3 options)
- * - "Mon profil" -> nom d'utilisateur + email
- * - "Paramètres" -> mot de passe + thème clair/sombre
- * - "Déconnexion"
- */
 function ProfileMenu({ onClose, onUpdate, onLogout }) {
   const [view, setView] = useState('menu'); // 'menu' | 'profile' | 'settings'
   const [profile, setProfile] = useState(null);
@@ -25,9 +21,13 @@ function ProfileMenu({ onClose, onUpdate, onLogout }) {
   const wrapRef = useRef();
   const { isDark, toggleTheme } = useTheme();
 
-  // Charge le profil UNE SEULE FOIS (ou quand on clique "Réessayer") —
-  // séparé du listener ci-dessous pour ne pas relancer l'appel API à
-  // chaque re-rendu du parent.
+  // État pour le guidage vocal
+  const [voiceGuidanceEnabled, setVoiceGuidanceEnabled] = useState(() => {
+    const saved = localStorage.getItem('voiceGuidanceEnabled');
+    return saved !== null ? saved === 'true' : true;
+  });
+
+  // Charge le profil UNE SEULE FOIS (ou quand on clique "Réessayer")
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -56,10 +56,11 @@ function ProfileMenu({ onClose, onUpdate, onLogout }) {
     };
   }, [reloadTick]);
 
-  // Ferme le menu si on clique en dehors (uniquement actif en vue "menu").
+  // Ferme le menu dropdown si on clique en dehors (uniquement en vue "menu")
   useEffect(() => {
+    if (view !== 'menu') return;
     const handleClickOutside = (e) => {
-      if (view === 'menu' && wrapRef.current && !wrapRef.current.contains(e.target)) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) {
         onClose();
       }
     };
@@ -101,6 +102,29 @@ function ProfileMenu({ onClose, onUpdate, onLogout }) {
     }
   };
 
+  // Fonction pour activer/désactiver le guidage vocal
+  const toggleVoiceGuidance = () => {
+    const newState = !voiceGuidanceEnabled;
+    setVoiceGuidanceEnabled(newState);
+    localStorage.setItem('voiceGuidanceEnabled', String(newState));
+    
+    // Utiliser le service vocal si disponible
+    import('../../services/speechService')
+      .then(({ speechService }) => {
+        speechService.setEnabled(newState);
+        if (!newState) {
+          speechService.stop();
+        } else {
+          setTimeout(() => {
+            speechService.speak('Guidage vocal activé');
+          }, 300);
+        }
+      })
+      .catch(() => {
+        console.log('Service vocal non disponible');
+      });
+  };
+
   // ===== CHARGEMENT =====
   if (loading) {
     return (
@@ -112,7 +136,7 @@ function ProfileMenu({ onClose, onUpdate, onLogout }) {
     );
   }
 
-  // ===== ERREUR (au lieu de rester invisible) =====
+  // ===== ERREUR =====
   if (fetchError) {
     return (
       <div ref={wrapRef} className="profile-dropdown">
@@ -157,8 +181,8 @@ function ProfileMenu({ onClose, onUpdate, onLogout }) {
     );
   }
 
-  // ===== VUE "MON PROFIL" / "PARAMÈTRES" =====
-  return (
+  // ===== VUE "MON PROFIL" / "PARAMÈTRES" (portail vers document.body) =====
+  return createPortal(
     <div className="profile-modal-backdrop" onClick={() => setView('menu')}>
       <div className="profile-modal" onClick={(e) => e.stopPropagation()}>
         <div className="profile-modal__header">
@@ -217,6 +241,7 @@ function ProfileMenu({ onClose, onUpdate, onLogout }) {
 
         {view === 'settings' && (
           <>
+            {/* SECTION THÈME */}
             <div className="profile-modal__settings-row">
               <div>
                 <div className="profile-modal__settings-title">Thème de l'application</div>
@@ -227,6 +252,48 @@ function ProfileMenu({ onClose, onUpdate, onLogout }) {
               </button>
             </div>
 
+            {/* SECTION GUIDAGE VOCAL */}
+            <div className="profile-modal__settings-row">
+              <div>
+                <div className="profile-modal__settings-title">
+                  <i className="bi bi-mic-fill" style={{ marginRight: '6px', color: voiceGuidanceEnabled ? '#6DBE45' : '#ccc' }}></i>
+                  Guidage vocal
+                </div>
+                <div className="profile-modal__settings-sub">
+                  {voiceGuidanceEnabled ? 'Activé' : 'Désactivé'}
+                </div>
+              </div>
+              <button 
+                className="profile-modal__theme-switch"
+                onClick={toggleVoiceGuidance}
+                style={{
+                  background: voiceGuidanceEnabled ? '#6DBE45' : '#ccc',
+                  border: 'none',
+                  borderRadius: '20px',
+                  width: '48px',
+                  height: '28px',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  position: 'relative',
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '2px'
+                }}
+              >
+                <span style={{
+                  display: 'block',
+                  width: '24px',
+                  height: '24px',
+                  background: 'white',
+                  borderRadius: '50%',
+                  transform: voiceGuidanceEnabled ? 'translateX(20px)' : 'translateX(0px)',
+                  transition: 'transform 0.3s ease',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                }} />
+              </button>
+            </div>
+
+            {/* SECTION MOT DE PASSE */}
             <div className="profile-modal__section-title">
               <i className="bi bi-lock-fill"></i> Changer le mot de passe
             </div>
@@ -259,7 +326,8 @@ function ProfileMenu({ onClose, onUpdate, onLogout }) {
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

@@ -1,0 +1,45 @@
+/* Style pour le switch du guidage vocal */
+.profile-modal__theme-switch {
+  position: relative;
+  width: 48px;
+  height: 28px;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: #ccc;
+  padding: 2px;
+  flex-shrink: 0;
+}
+
+.profile-modal__theme-switch.active {
+  background: #6DBE45;
+}
+
+.profile-modal__theme-switch .switch-thumb {
+  display: block;
+  width: 24px;
+  height: 24px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.profile-modal__theme-switch.active .switch-thumb {
+  transform: translateX(20px);
+}
+
+/* Ajout de l'icône mic dans le titre */
+.profile-modal__settings-title i {
+  margin-right: 6px;
+  font-size: 16px;
+}
+
+.profile-modal__settings-title i.bi-mic-fill {
+  color: #6DBE45;
+}
+
+.profile-modal__settings-row:last-child {
+  border-bottom: none;
+}

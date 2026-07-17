@@ -43,7 +43,27 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  transition: background-color 0.3s, color 0.3s;
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+/* Transition douce pour tous les éléments qui utilisent les variables CSS */
+*, *::before, *::after {
+  transition: background-color 0.4s ease, 
+              color 0.4s ease, 
+              border-color 0.4s ease, 
+              box-shadow 0.4s ease;
+}
+
+/* Animation de fondu pour le body lors du changement de thème */
+body[data-theme] .dash-wrapper,
+body[data-theme] .visitor-app,
+body[data-theme] .auth-layout {
+  animation: theme-fade 0.4s ease;
+}
+
+@keyframes theme-fade {
+  0% { opacity: 0.7; }
+  100% { opacity: 1; }
 }
 
 code {

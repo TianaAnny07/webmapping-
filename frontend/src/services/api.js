@@ -19,6 +19,23 @@ api.interceptors.request.use(
   }
 );
 
+// Intercepteur pour gérer les erreurs 401 globalement (token expiré / invalide)
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      const hadToken = localStorage.getItem('token');
+      if (hadToken) {
+        // Token expiré → déconnexion automatique et redirection vers la page de login
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 export const authService = {
  register: async (email, password, role, username) => {
   const response = await api.post('/auth/register', { email, password, role, username });

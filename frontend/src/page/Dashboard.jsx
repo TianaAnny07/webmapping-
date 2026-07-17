@@ -4,7 +4,6 @@ import { authService } from '../services/api';
 import api from '../services/api';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import './Dashboard.css';
-import ThemeToggle from '../components/ThemeToggle';
 
 import TableauDeBord from './Navbar/TableauDeBord';
 import GestionEtablissements from './Navbar/GestionEtablissements';
@@ -115,7 +114,6 @@ const confirmLogout = () => {
 
         {/* HEADER */}
         <header className="dash-header">
-          <ThemeToggle />
           <button className="dash-logout" onClick={handleLogout}>
             <i className="bi bi-box-arrow-right"></i> Déconnexion
           </button>

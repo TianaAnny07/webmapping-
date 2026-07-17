@@ -61,7 +61,7 @@ function GestionEtablissements() {
       <h2 className="dash-section-heading">
         <i className="bi bi-cloud-upload-fill"></i> Gestion d'établissements
       </h2>
-      <p style={{ color: '#888', marginBottom: '24px' }}>
+      <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>
         Importez vos données depuis QGIS, GeoJSON ou CSV pour mettre à jour la base d'établissements.
       </p>
 
@@ -76,17 +76,17 @@ function GestionEtablissements() {
             onClick={() => setSelectedType(type.id)}
             style={{
               flex: 1,
-              border: `2px solid ${selectedType === type.id ? '#6DBE45' : '#e0e0e0'}`,
+              border: `2px solid ${selectedType === type.id ? '#6DBE45' : 'var(--border-color)'}`,
               borderRadius: '10px',
               padding: '16px',
               cursor: 'pointer',
-              background: selectedType === type.id ? 'rgba(109,190,69,0.05)' : '#fff',
+              background: selectedType === type.id ? 'rgba(109,190,69,0.05)' : 'var(--bg-card)',
               transition: 'all 0.2s'
             }}
           >
             <i className={`bi ${type.icon}`} style={{ fontSize: '24px', color: '#6DBE45' }}></i>
             <div style={{ fontWeight: 'bold', marginTop: '8px' }}>{type.title}</div>
-            <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>{type.desc}</div>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>{type.desc}</div>
           </div>
         ))}
       </div>
@@ -96,23 +96,23 @@ function GestionEtablissements() {
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         style={{
-          border: `2px dashed ${selectedFile ? '#6DBE45' : '#ccc'}`,
+          border: `2px dashed ${selectedFile ? '#6DBE45' : 'var(--border-color)'}`,
           borderRadius: '10px',
           padding: '40px',
           textAlign: 'center',
-          background: selectedFile ? 'rgba(109,190,69,0.05)' : '#fafafa',
+          background: selectedFile ? 'rgba(109,190,69,0.05)' : 'var(--bg-input)',
           marginBottom: '16px',
           transition: 'all 0.2s'
         }}
       >
-        <i className="bi bi-cloud-upload" style={{ fontSize: '40px', color: selectedFile ? '#6DBE45' : '#ccc' }}></i>
+        <i className="bi bi-cloud-upload" style={{ fontSize: '40px', color: selectedFile ? '#6DBE45' : 'var(--text-secondary)' }}></i>
 
         {selectedFile ? (
           <div style={{ marginTop: '12px' }}>
             <p style={{ fontWeight: 'bold', color: '#6DBE45' }}>
               <i className="bi bi-check-circle-fill"></i> {selectedFile.name}
             </p>
-            <p style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
               {(selectedFile.size / 1024).toFixed(1)} KB
             </p>
             <button
@@ -129,7 +129,7 @@ function GestionEtablissements() {
         ) : (
           <>
             <p style={{ margin: '12px 0 8px', fontWeight: 'bold' }}>Glisser-déposer votre fichier ici</p>
-            <p style={{ color: '#888', marginBottom: '16px' }}>ou</p>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>ou</p>
             <label style={{
               background: '#6DBE45', color: 'white', padding: '10px 24px',
               borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold'

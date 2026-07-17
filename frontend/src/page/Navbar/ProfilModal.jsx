@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import api from '../../services/api';
+import { useTheme } from '../../context/ThemeContext';
 
 function ProfilModal({ user, onClose, onUpdate, onLogout }) {
+  const { isDark, toggleTheme } = useTheme();
   const [view, setView] = useState('menu'); // 'menu' | 'profile' | 'settings'
   const [profile, setProfile] = useState(null);
   const [username, setUsername] = useState('');
@@ -228,31 +230,54 @@ function ProfilModal({ user, onClose, onUpdate, onLogout }) {
         </div>
 
         {view === 'settings' && (
-          <div style={{ borderTop: '1px solid #eee', marginTop: '14px', paddingTop: '14px' }}>
-            <div style={{ fontSize: '12px', fontWeight: '600', color: '#555', marginBottom: '10px' }}>
-              <i className="bi bi-lock-fill"></i> Changer le mot de passe
+          <>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: '#f0faf0', borderRadius: '10px', padding: '12px 14px', marginBottom: '16px'
+            }}>
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: '600', color: '#1a1a2e' }}>Thème de l'application</div>
+                <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>{isDark ? 'Sombre' : 'Clair'}</div>
+              </div>
+              <button
+                onClick={toggleTheme}
+                style={{
+                  width: '38px', height: '38px', borderRadius: '50%',
+                  border: '1px solid #ddd', background: '#fff',
+                  color: '#6DBE45', cursor: 'pointer', fontSize: '15px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}
+              >
+                <i className={`bi ${isDark ? 'bi-moon-stars-fill' : 'bi-sun-fill'}`}></i>
+              </button>
             </div>
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Nouveau mot de passe</label>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="Laisser vide pour ne pas changer"
-                style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
-              />
+
+            <div style={{ borderTop: '1px solid #eee', paddingTop: '14px' }}>
+              <div style={{ fontSize: '12px', fontWeight: '600', color: '#555', marginBottom: '10px' }}>
+                <i className="bi bi-lock-fill"></i> Changer le mot de passe
+              </div>
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Nouveau mot de passe</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="Laisser vide pour ne pas changer"
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Confirmer</label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  placeholder="Répéter le mot de passe"
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
+                />
+              </div>
             </div>
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Confirmer</label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={e => setConfirmPassword(e.target.value)}
-                placeholder="Répéter le mot de passe"
-                style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
-              />
-            </div>
-          </div>
+          </>
         )}
 
         {/* Boutons */}

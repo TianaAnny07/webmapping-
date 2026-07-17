@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../services/api';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
   BarChart, Bar
 } from 'recharts';
@@ -53,7 +53,7 @@ function TableauDeBord() {
   })).sort((a, b) => b.total - a.total).slice(0, 8);
 
   if (loading) return (
-    <div style={{ padding: '40px', textAlign: 'center', color: '#888' }}>
+    <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
       <i className="bi bi-hourglass-split" style={{ fontSize: '32px' }}></i>
       <p style={{ marginTop: '12px' }}>Chargement des données...</p>
     </div>
@@ -71,15 +71,15 @@ function TableauDeBord() {
           { label: 'Distance moyenne', value: '4.2 km', icon: 'bi-geo-alt-fill', color: '#e74c3c', bg: 'rgba(231,76,60,0.1)', sub: 'vers une FS' },
         ].map(kpi => (
           <div key={kpi.label} style={{
-            background: '#fff', border: '1px solid #e0e0e0',
+            background: 'var(--bg-card)', border: '1px solid var(--border-color)',
             borderRadius: '12px', padding: '20px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+            boxShadow: '0 2px 8px var(--shadow)'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
-                <div style={{ fontSize: '12px', color: '#888', marginBottom: '8px' }}>{kpi.label}</div>
-                <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#1a1a2e' }}>{kpi.value}</div>
-                <div style={{ fontSize: '11px', color: '#aaa', marginTop: '4px' }}>{kpi.sub}</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>{kpi.label}</div>
+                <div style={{ fontSize: '28px', fontWeight: 'bold', color: 'var(--text-primary)' }}>{kpi.value}</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>{kpi.sub}</div>
               </div>
               <div style={{
                 width: '44px', height: '44px', borderRadius: '10px',
@@ -98,35 +98,55 @@ function TableauDeBord() {
 
         {/* Ligne - Evolution */}
         <div style={{
-          background: '#fff', border: '1px solid #e0e0e0',
+          background: 'var(--bg-card)', border: '1px solid var(--border-color)',
           borderRadius: '12px', padding: '20px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+          boxShadow: '0 2px 8px var(--shadow)'
         }}>
-          <div style={{ fontSize: '14px', fontWeight: '600', color: '#1a1a2e', marginBottom: '4px' }}>
+          <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '4px' }}>
             Évolution du taux de couverture
           </div>
-          <div style={{ fontSize: '12px', color: '#888', marginBottom: '16px' }}>2020 — 2025</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '16px' }}>2020 — 2025</div>
           <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={evolutionData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
-              <XAxis dataKey="annee" tick={{ fontSize: 12, fill: '#888' }}/>
-              <YAxis tick={{ fontSize: 12, fill: '#888' }} unit="%"/>
-              <Tooltip formatter={(v) => [`${v}%`, 'Taux']}/>
-              <Line type="monotone" dataKey="taux" stroke="#6DBE45" strokeWidth={2.5} dot={{ fill: '#6DBE45', r: 4 }}/>
-            </LineChart>
+            <AreaChart data={evolutionData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="gradientTaux" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#6DBE45" stopOpacity={0.4}/>
+                  <stop offset="95%" stopColor="#6DBE45" stopOpacity={0.02}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" strokeOpacity={0.4}/>
+              <XAxis dataKey="annee" tick={{ fontSize: 12, fill: 'var(--text-secondary)' }} axisLine={false} tickLine={false}/>
+              <YAxis tick={{ fontSize: 12, fill: 'var(--text-secondary)' }} unit="%" axisLine={false} tickLine={false} width={35}/>
+              <Tooltip
+                formatter={(v) => [`${v}%`, 'Taux']}
+                contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '13px', color: 'var(--text-primary)' }}
+                labelStyle={{ color: 'var(--text-secondary)' }}
+              />
+              <Area
+                type="monotone"
+                dataKey="taux"
+                stroke="#6DBE45"
+                strokeWidth={3}
+                fill="url(#gradientTaux)"
+                dot={{ fill: '#6DBE45', r: 4, stroke: '#6DBE45', strokeWidth: 1 }}
+                activeDot={{ r: 6, fill: '#6DBE45', stroke: 'var(--bg-card)', strokeWidth: 2 }}
+                animationDuration={1500}
+                animationEasing="ease-out"
+              />
+            </AreaChart>
           </ResponsiveContainer>
         </div>
 
         {/* Donut - Répartition */}
         <div style={{
-          background: '#fff', border: '1px solid #e0e0e0',
+          background: 'var(--bg-card)', border: '1px solid var(--border-color)',
           borderRadius: '12px', padding: '20px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+          boxShadow: '0 2px 8px var(--shadow)'
         }}>
-          <div style={{ fontSize: '14px', fontWeight: '600', color: '#1a1a2e', marginBottom: '4px' }}>
+          <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '4px' }}>
             Répartition par type
           </div>
-          <div style={{ fontSize: '12px', color: '#888', marginBottom: '8px' }}>Total : {totalFS} FS</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>Total : {totalFS} FS</div>
           <ResponsiveContainer width="100%" height={200}>
             <PieChart>
               <Pie
@@ -144,7 +164,7 @@ function TableauDeBord() {
               <Legend
                 iconType="circle"
                 iconSize={8}
-                formatter={(value) => <span style={{ fontSize: '11px', color: '#888' }}>{value}</span>}
+                formatter={(value) => <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{value}</span>}
               />
               <Tooltip formatter={(v, name) => [v, name]}/>
             </PieChart>
@@ -154,14 +174,14 @@ function TableauDeBord() {
 
       {/* GRAPHIQUE BARRES - Par région */}
       <div style={{
-        background: '#fff', border: '1px solid #e0e0e0',
+        background: 'var(--bg-card)', border: '1px solid var(--border-color)',
         borderRadius: '12px', padding: '20px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+        boxShadow: '0 2px 8px var(--shadow)'
       }}>
-        <div style={{ fontSize: '14px', fontWeight: '600', color: '#1a1a2e', marginBottom: '4px' }}>
+        <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '4px' }}>
           Établissements par région
         </div>
-        <div style={{ fontSize: '12px', color: '#888', marginBottom: '16px' }}>Top 8 régions</div>
+        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '16px' }}>Top 8 régions</div>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={regionData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>

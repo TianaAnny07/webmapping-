@@ -61,11 +61,11 @@ function GestionUtilisateurs() {
       )}
 
       {loading ? (
-        <p style={{ color: '#888' }}>Chargement...</p>
+        <p style={{ color: 'var(--text-secondary)' }}>Chargement...</p>
       ) : (
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ background: '#f4f6f9', textAlign: 'left' }}>
+            <tr style={{ background: 'var(--bg-input)', textAlign: 'left' }}>
               <th style={th}>ID</th>
               <th style={th}>Email</th>
               <th style={th}>Rôle</th>
@@ -75,7 +75,7 @@ function GestionUtilisateurs() {
           </thead>
           <tbody>
             {users.map((user) => (
-              <tr key={user.id} style={{ borderBottom: '1px solid #eee' }}>
+              <tr key={user.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
                 {editUser === user.id ? (
                   <>
                     <td style={td}>{user.id}</td>
@@ -131,14 +131,14 @@ function GestionUtilisateurs() {
   );
 }
 
-const th = { padding: '10px 14px', fontWeight: '600', fontSize: '13px', color: '#555' };
-const td = { padding: '10px 14px', fontSize: '13px', color: '#333' };
+const th = { padding: '10px 14px', fontWeight: '600', fontSize: '13px', color: 'var(--text-secondary)' };
+const td = { padding: '10px 14px', fontSize: '13px', color: 'var(--text-primary)' };
 const badge = { color: '#fff', padding: '2px 10px', borderRadius: '12px', fontSize: '11px' };
 const btnBase = { border: 'none', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer', marginRight: '6px', fontSize: '13px' };
 const btnBlue = { ...btnBase, background: '#3498db', color: '#fff' };
 const btnRed = { ...btnBase, background: '#e74c3c', color: '#fff' };
 const btnGreen = { ...btnBase, background: '#6DBE45', color: '#fff' };
-const btnGray = { ...btnBase, background: '#ccc', color: '#333' };
-const inputStyle = { padding: '4px 8px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '13px', width: '100%' };
+const btnGray = { ...btnBase, background: 'var(--bg-input)', color: 'var(--text-secondary)' };
+const inputStyle = { padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--border-color)', fontSize: '13px', width: '100%', background: 'var(--bg-input)', color: 'var(--text-primary)' };
 
 export default GestionUtilisateurs;
