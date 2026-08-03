@@ -1,0 +1,312 @@
+/* NavigationOverlay.css — styles dédiés au composant de navigation */
+
+.nav-overlay {
+  width: 100%;
+  max-width: 520px;
+  animation: navOverlayIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes navOverlayIn {
+  from { opacity: 0; transform: translateY(-14px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── Carte principale ── */
+.nav-overlay__content {
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 20px;
+  padding: 16px 18px 14px;
+  box-shadow:
+    0 4px 6px rgba(0,0,0,0.04),
+    0 12px 32px rgba(0,0,0,0.12),
+    0 0 0 1px rgba(255,255,255,0.6) inset;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+/* ── Bandeau fallback ── */
+.nav-overlay__fallback-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #fffbeb, #fef3c7);
+  border: 1px solid #fcd34d;
+  border-radius: 10px;
+  padding: 9px 12px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: #92400e;
+  font-weight: 500;
+}
+
+.nav-overlay__fallback-warning i {
+  color: #f59e0b;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+/* ── Barre de progression ── */
+.nav-overlay__progress {
+  margin-bottom: 12px;
+}
+
+.nav-overlay__progress-bar {
+  height: 5px;
+  background: #e2e8f0;
+  border-radius: 99px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.nav-overlay__progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6DBE45, #4ade80);
+  border-radius: 99px;
+  transition: width 0.9s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.nav-overlay__progress-fill::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4ade80;
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.6);
+}
+
+.nav-overlay__progress-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #94a3b8;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.nav-overlay__progress-info span {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* ── Instruction principale ── */
+.nav-overlay__instruction {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0 8px;
+}
+
+.nav-overlay__instruction-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #6DBE45, #4a9e2e);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 20px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(109, 190, 69, 0.35);
+}
+
+.nav-overlay__instruction-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.nav-overlay__instruction-main {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.35;
+}
+
+.nav-overlay__instruction-sub {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 3px;
+  font-weight: 500;
+}
+
+/* ── Destination ── */
+.nav-overlay__destination {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  margin: 4px 0 10px;
+  font-size: 12px;
+  color: #166534;
+  font-weight: 600;
+}
+
+.nav-overlay__destination i {
+  color: #6DBE45;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.nav-overlay__destination span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Actions ── */
+.nav-overlay__actions {
+  display: flex;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.nav-overlay__voice-btn {
+  flex: 1;
+  padding: 9px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.nav-overlay__voice-btn:hover {
+  border-color: #6DBE45;
+  color: #6DBE45;
+  background: #f0fdf4;
+}
+
+.nav-overlay__voice-btn.is-active {
+  background: linear-gradient(135deg, #6DBE45, #4a9e2e);
+  border-color: transparent;
+  color: white;
+  box-shadow: 0 3px 10px rgba(109, 190, 69, 0.35);
+}
+
+.nav-overlay__voice-btn.is-active:hover {
+  background: linear-gradient(135deg, #5aa336, #3d8a24);
+}
+
+.nav-overlay__repeat-btn {
+  flex: 1;
+  padding: 9px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.nav-overlay__repeat-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #1e293b;
+}
+
+.nav-overlay__repeat-btn i {
+  font-size: 13px;
+}
+
+.nav-overlay__close-btn {
+  width: 40px;
+  height: 40px;
+  border: 1.5px solid #fecaca;
+  border-radius: 10px;
+  background: #fff5f5;
+  color: #ef4444;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.nav-overlay__close-btn:hover {
+  background: #fee2e2;
+  border-color: #ef4444;
+  transform: scale(1.05);
+}
+
+.nav-overlay__close-btn i {
+  font-size: 16px;
+}
+
+/* ── Indicateur vocal ── */
+.nav-overlay__voice-pulse {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.9);
+  animation: voicePulse 0.9s ease-in-out infinite;
+  margin-left: 2px;
+}
+
+@keyframes voicePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.3; transform: scale(0.5); }
+}
+
+/* ── Responsive ── */
+@media (max-width: 899.98px) {
+  .nav-overlay { max-width: 100%; }
+  .nav-overlay__content { padding: 13px 14px 12px; border-radius: 16px; }
+  .nav-overlay__instruction-main { font-size: 14px; }
+  .nav-overlay__instruction-icon { width: 38px; height: 38px; font-size: 17px; border-radius: 11px; }
+}
+
+@media (max-width: 480px) {
+  .nav-overlay__content { padding: 11px 12px 10px; border-radius: 14px; }
+  .nav-overlay__instruction-main { font-size: 13px; }
+  .nav-overlay__instruction-icon { width: 34px; height: 34px; font-size: 15px; border-radius: 10px; }
+  .nav-overlay__voice-btn,
+  .nav-overlay__repeat-btn { font-size: 11px; padding: 8px 8px; }
+  .nav-overlay__close-btn { width: 36px; height: 36px; }
+}
+
+/* ── Dark mode ── */
+@media (prefers-color-scheme: dark) {
+  .nav-overlay__content {
+    background: rgba(15, 23, 42, 0.97);
+    border-color: rgba(51, 65, 85, 0.8);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.05) inset;
+  }
+  .nav-overlay__instruction-main { color: #f1f5f9; }
+  .nav-overlay__instruction-sub  { color: #94a3b8; }
+  .nav-overlay__progress-bar     { background: #1e293b; }
+  .nav-overlay__progress-info    { color: #64748b; }
+  .nav-overlay__destination       { background: #052e16; border-color: #166534; color: #86efac; }
+  .nav-overlay__actions           { border-top-color: #1e293b; }
+  .nav-overlay__voice-btn,
+  .nav-overlay__repeat-btn        { background: #1e293b; border-color: #334155; color: #94a3b8; }
+  .nav-overlay__voice-btn:hover,
+  .nav-overlay__repeat-btn:hover  { background: #0f172a; }
+  .nav-overlay__close-btn         { background: #1e0a0a; border-color: #7f1d1d; color: #fca5a5; }
+  .nav-overlay__fallback-warning  { background: #451a03; border-color: #92400e; color: #fde68a; }
+}

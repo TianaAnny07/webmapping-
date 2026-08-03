@@ -34,26 +34,6 @@ export default function useDistanceMeasure() {
   }, [reset]);
 
   /** Appelé quand l'utilisateur clique sur la carte en mode mesure. */
-  const handleMapClick = useCallback((coords) => {
-    setPointA((prevA) => {
-      if (!prevA) return coords; // 1er clic -> point A
-      return prevA;
-    });
-    setPointB((prevB) => {
-      // Si A existe déjà et B n'existe pas encore -> ce clic est B
-      return null;
-    });
-  }, []);
-
-  // On sépare la logique en deux temps clairs plutôt que de l'imbriquer
-  // dans les setState ci-dessus (plus lisible et plus fiable) :
-  const placePoint = useCallback((coords) => {
-    setPointA((prevA) => {
-      if (!prevA) return coords;
-      return prevA;
-    });
-  }, []);
-
   const handlePointSelection = useCallback(
     (coords) => {
       if (!pointA) {
@@ -63,7 +43,7 @@ export default function useDistanceMeasure() {
       } else if (!pointB) {
         setPointB(coords);
       } else {
-        // Une mesure était déjà complète : on repart d'une nouvelle mesure
+        // Mesure déjà complète : nouveau clic repart de zéro
         setPointA(coords);
         setPointB(null);
         setRoute(null);

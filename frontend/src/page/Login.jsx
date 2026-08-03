@@ -4,20 +4,16 @@ import { authService } from '../services/api';
 import './Auth.css';
 
 function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [email,        setEmail]        = useState('');
+  const [password,     setPassword]     = useState('');
+  const [error,        setError]        = useState('');
+  const [loading,      setLoading]      = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
     if (authService.isAuthenticated()) {
-      if (authService.isAdmin()) {
-        navigate('/dashboard', { replace: true });
-      } else {
-        navigate('/app', { replace: true });
-      }
+      navigate(authService.isAdmin() ? '/dashboard' : '/app', { replace: true });
     }
   }, [navigate]);
 
@@ -25,15 +21,9 @@ function Login() {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     try {
       const response = await authService.login(email, password);
-      
-      if (response.user.role === 'admin') {
-        navigate('/dashboard');
-      } else {
-        navigate('/app');
-      }
+      navigate(response.user.role === 'admin' ? '/dashboard' : '/app');
     } catch (err) {
       setError(err.response?.data?.message || 'Échec de la connexion. Vérifiez vos identifiants.');
     } finally {
@@ -50,7 +40,8 @@ function Login() {
               Bienvenue<span className="title-dot">.</span>
             </h1>
             <p className="auth-subtitle">
-              Pas encore de compte ? <Link to="/register" className="auth-link">S'inscrire</Link>
+              Pas encore de compte ?{' '}
+              <Link to="/register" className="auth-link">S'inscrire</Link>
             </p>
           </div>
 
@@ -87,7 +78,7 @@ function Login() {
               <label htmlFor="password" className="field-label">Mot de passe</label>
               <div className="input-wrapper">
                 <input
-                  type={showPassword ? "text" : "password"}
+                  type={showPassword ? 'text' : 'password'}
                   id="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -131,19 +122,19 @@ function Login() {
           <ellipse cx="150" cy="150" rx="120" ry="80" stroke="#FFFFFF" strokeWidth="1" opacity="0.2" />
           <ellipse cx="150" cy="150" rx="40" ry="120" stroke="#FFFFFF" strokeWidth="1" opacity="0.2" />
           <ellipse cx="150" cy="150" rx="80" ry="120" stroke="#FFFFFF" strokeWidth="1" opacity="0.2" />
-          <circle cx="150" cy="90" r="6" fill="#FFFFFF" />
+          <circle cx="150" cy="90"  r="6" fill="#FFFFFF" />
           <circle cx="110" cy="130" r="6" fill="#FFFFFF" />
           <circle cx="190" cy="140" r="6" fill="#FFFFFF" />
           <circle cx="130" cy="180" r="6" fill="#FFFFFF" />
           <circle cx="180" cy="110" r="6" fill="#FFFFFF" />
-          <path d="M 150 90 L 110 130" stroke="#FFFFFF" strokeWidth="1.5" opacity="0.4" strokeDasharray="3 3" />
+          <path d="M 150 90 L 110 130"  stroke="#FFFFFF" strokeWidth="1.5" opacity="0.4" strokeDasharray="3 3" />
           <path d="M 110 130 L 190 140" stroke="#FFFFFF" strokeWidth="1.5" opacity="0.4" strokeDasharray="3 3" />
           <path d="M 190 140 L 180 110" stroke="#FFFFFF" strokeWidth="1.5" opacity="0.4" strokeDasharray="3 3" />
           <path d="M 130 180 L 110 130" stroke="#FFFFFF" strokeWidth="1.5" opacity="0.4" strokeDasharray="3 3" />
           <g transform="translate(150, 150)">
             <circle cx="0" cy="0" r="25" fill="#FFFFFF" opacity="0.2" />
             <circle cx="0" cy="0" r="15" fill="#FFFFFF" />
-            <circle cx="0" cy="0" r="8" fill="#6DBE45" />
+            <circle cx="0" cy="0" r="8"  fill="#6DBE45" />
           </g>
         </svg>
       </div>

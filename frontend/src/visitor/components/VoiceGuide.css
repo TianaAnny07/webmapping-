@@ -1,36 +1,50 @@
-/* src/pages/VisitorApp/components/VoiceGuide.css */
+/* VoiceGuide.css — Glassmorphism + RGB transparent design */
 
 .voice-guide {
   position: relative;
-  background: var(--bg-card, #ffffff);
-  border-radius: 12px;
-  padding: 12px 16px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-  border: 1px solid var(--border-color, #e0e0e0);
-  transition: all 0.3s ease;
-  margin-bottom: 12px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 16px;
+  padding: 14px 18px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  transition: all 0.35s ease;
+  margin-bottom: 14px;
+}
+
+.voice-guide:hover {
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.12);
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: translateY(-1px);
 }
 
 .voice-guide--active {
-  border-color: #6DBE45;
-  box-shadow: 0 2px 16px rgba(109, 190, 69, 0.2);
+  border-color: rgba(109, 190, 69, 0.6);
+  box-shadow: 0 4px 24px rgba(109, 190, 69, 0.25), inset 0 0 0 1px rgba(109, 190, 69, 0.15);
+}
+
+.voice-guide--active:hover {
+  border-color: rgba(109, 190, 69, 0.85);
+  box-shadow: 0 6px 32px rgba(109, 190, 69, 0.35), inset 0 0 0 1px rgba(109, 190, 69, 0.25);
 }
 
 .voice-guide--unavailable {
-  opacity: 0.6;
-  color: #999;
+  opacity: 0.55;
+  color: rgba(255, 255, 255, 0.6);
   cursor: not-allowed;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-size: 13px;
-  padding: 8px 12px;
+  padding: 10px 14px;
 }
 
 .voice-guide__controls {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -38,47 +52,51 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 14px;
+  padding: 9px 16px;
   border: none;
-  border-radius: 8px;
-  background: var(--bg-secondary, #f5f5f5);
-  color: var(--text-primary, #333);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s ease;
   font-size: 14px;
   font-weight: 500;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 
 .voice-guide__btn:hover {
-  background: var(--bg-hover, #e8e8e8);
-  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.35);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+}
+
+.voice-guide__btn:active {
+  transform: translateY(0) scale(0.98);
 }
 
 .voice-guide__btn--active {
-  background: #6DBE45;
+  background: rgba(109, 190, 69, 0.7);
   color: white;
+  border: 1px solid rgba(109, 190, 69, 0.4);
 }
 
 .voice-guide__btn--active:hover {
-  background: #5AA336;
+  background: rgba(109, 190, 69, 0.9);
+  box-shadow: 0 4px 16px rgba(109, 190, 69, 0.4);
+  border-color: rgba(109, 190, 69, 0.7);
 }
 
 .voice-guide__btn--mute.active {
-  background: #ff6b6b;
+  background: rgba(255, 107, 107, 0.7);
   color: white;
+  border: 1px solid rgba(255, 107, 107, 0.4);
 }
 
 .voice-guide__btn--mute.active:hover {
-  background: #e55555;
-}
-
-.voice-guide__btn--info {
-  background: #4a90d9;
-  color: white;
-}
-
-.voice-guide__btn--info:hover {
-  background: #3a7bc8;
+  background: rgba(255, 107, 107, 0.9);
+  box-shadow: 0 4px 16px rgba(255, 107, 107, 0.4);
+  border-color: rgba(255, 107, 107, 0.7);
 }
 
 .voice-guide__btn i {
@@ -101,9 +119,9 @@
 
 /* Status section */
 .voice-guide__status {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border-color, #e0e0e0);
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 .voice-guide__speaking {
@@ -113,6 +131,7 @@
   color: #6DBE45;
   font-weight: 500;
   font-size: 14px;
+  text-shadow: 0 0 10px rgba(109, 190, 69, 0.3);
 }
 
 .voice-guide__pulse {
@@ -122,30 +141,40 @@
   background: #6DBE45;
   border-radius: 50%;
   animation: pulse 1.2s ease-in-out infinite;
+  box-shadow: 0 0 8px rgba(109, 190, 69, 0.5);
 }
 
 @keyframes pulse {
   0%, 100% {
     transform: scale(1);
     opacity: 1;
+    box-shadow: 0 0 8px rgba(109, 190, 69, 0.5);
   }
   50% {
     transform: scale(1.5);
-    opacity: 0.5;
+    opacity: 0.4;
+    box-shadow: 0 0 16px rgba(109, 190, 69, 0.8);
   }
 }
 
 .voice-guide__waiting {
-  color: var(--text-secondary, #888);
+  color: rgba(255, 255, 255, 0.65);
   font-size: 13px;
 }
 
+.voice-guide__waiting--muted {
+  color: rgba(255, 107, 107, 0.7);
+}
+
 .voice-guide__current-step {
-  margin-top: 6px;
-  padding: 8px 12px;
-  background: var(--bg-highlight, #f8f9fa);
-  border-radius: 6px;
+  margin-top: 8px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border-radius: 10px;
   font-size: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .voice-guide__step-number {
@@ -155,26 +184,120 @@
   color: #6DBE45;
   margin-right: 8px;
   padding: 2px 8px;
-  background: rgba(109, 190, 69, 0.1);
+  background: rgba(109, 190, 69, 0.15);
   border-radius: 4px;
 }
 
 .voice-guide__step-text {
-  color: var(--text-primary, #333);
+  color: rgba(255, 255, 255, 0.9);
 }
 
 /* Progress bar */
 .voice-guide__progress {
-  margin-top: 8px;
-  height: 3px;
-  background: var(--bg-secondary, #e0e0e0);
-  border-radius: 3px;
+  margin-top: 10px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
   overflow: hidden;
 }
 
 .voice-guide__progress-bar {
   height: 100%;
-  background: #6DBE45;
-  border-radius: 3px;
-  transition: width 0.5s ease;
+  background: linear-gradient(90deg, #6DBE45, #8fd46b);
+  border-radius: 4px;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 6px rgba(109, 190, 69, 0.4);
+}
+/* ============================================================
+   VOICE GUIDE
+   ============================================================ */
+.voice-guide {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border-radius: 12px;
+  padding: 8px 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  margin-top: 8px;
+  width: 100%;
+}
+
+.voice-guide__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex: 1;
+}
+
+.voice-guide__toggle:hover {
+  background: #f1f5f9;
+}
+
+.voice-guide__toggle.is-active {
+  background: #0EA5E9;
+  border-color: #0EA5E9;
+  color: white;
+}
+
+.voice-guide__toggle.is-active:hover {
+  background: #0284C7;
+}
+
+.voice-guide__toggle i {
+  font-size: 16px;
+}
+
+.voice-guide__pulse {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 400;
+  color: #22c55e;
+  margin-left: auto;
+}
+
+.voice-guide__pulse-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: voice-pulse 1s ease-in-out infinite;
+}
+
+@keyframes voice-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.6); }
+}
+
+.voice-guide__status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #22c55e;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: #d1fae5;
+}
+
+.voice-guide__status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
 }

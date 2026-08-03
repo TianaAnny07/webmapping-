@@ -1,16 +1,37 @@
-import React from 'react';
-import { getTypeLabel } from '../utils/facilityDisplay';
+import React, { useState, useMemo } from 'react';
+import { getTypeLabel, isOpenNow } from '../utils/facilityDisplay';
 import { formatDistance } from '../utils/geo';
+
+const FACILITY_TYPES = [
+  { value: 'hospital', label: 'Hôpital' },
+  { value: 'clinic', label: 'Clinique' },
+  { value: 'pharmacy', label: 'Pharmacie' },
+  { value: 'doctor', label: 'CSB (Médecin)' },
+  { value: 'nurse', label: 'Poste de santé' },
+  { value: 'dentist', label: 'Dentiste' },
+  { value: 'birthing_centre', label: 'Maternité' },
+];
 
 function FacilityRow({ feature, onSelect, distanceKm }) {
   const p = feature.properties;
+  const open = isOpenNow(p.openingTime, p.closingTime, p.is24h);
+
+  const statusClass = p.is24h ? 'open' : open === true ? 'open' : open === false ? 'closed' : 'unknown';
+  const statusIcon = statusClass === 'open' ? 'bi-check-circle-fill' : statusClass === 'closed' ? 'bi-x-circle-fill' : 'bi-clock';
+  const statusLabel = p.is24h ? 'Ouvert 24h/24' : open === true ? 'Ouvert' : open === false ? 'Fermé' : 'N/A';
+
   return (
     <button className="explore-row" onClick={() => onSelect(feature)}>
       <div className="explore-row__icon">
         <i className="bi bi-hospital"></i>
       </div>
       <div className="explore-row__info">
-        <div className="explore-row__name">{p.name || 'Formation sanitaire'}</div>
+        <div className="explore-row__name">
+          {p.name || 'Formation sanitaire'}
+          <span className={`explore-row__status-badge explore-row__status-badge--${statusClass}`}>
+            <i className={`bi ${statusIcon}`}></i> {statusLabel}
+          </span>
+        </div>
         <div className="explore-row__meta">
           {getTypeLabel(p.healthcare, p.amenity, p.name)}
           {p.adm2Name ? ` · ${p.adm2Name}` : ''}
@@ -36,7 +57,65 @@ function ExplorePanel({
   onRequestNearby,
   geoError,
 }) {
-  const list = tab === 'nearby' ? nearbyResults : searchResults;
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [openNowOnly, setOpenNowOnly] = useState(false);
+
+  const filteredSearchResults = useMemo(() => {
+    let results = searchResults;
+
+    if (typeFilter !== 'all') {
+      results = results.filter((f) => {
+        const type = f.properties.healthcare || f.properties.amenity || '';
+        const nameUpper = (f.properties.name || '').toUpperCase();
+        if (typeFilter === 'doctor') {
+          return type === 'doctor' || type === 'doctors' || nameUpper.includes('CSB');
+        }
+        return type === typeFilter;
+      });
+    }
+
+    if (openNowOnly) {
+      results = results.filter((f) => {
+        const open = isOpenNow(f.properties.openingTime, f.properties.closingTime, f.properties.is24h);
+        return open === true;
+      });
+    }
+
+    return results;
+  }, [searchResults, typeFilter, openNowOnly]);
+
+  const filteredNearbyResults = useMemo(() => {
+    let results = nearbyResults;
+
+    if (typeFilter !== 'all') {
+      results = results.filter((f) => {
+        const type = f.properties.healthcare || f.properties.amenity || '';
+        const nameUpper = (f.properties.name || '').toUpperCase();
+        if (typeFilter === 'doctor') {
+          return type === 'doctor' || type === 'doctors' || nameUpper.includes('CSB');
+        }
+        return type === typeFilter;
+      });
+    }
+
+    if (openNowOnly) {
+      results = results.filter((f) => {
+        const open = isOpenNow(f.properties.openingTime, f.properties.closingTime, f.properties.is24h);
+        return open === true;
+      });
+    }
+
+    return results;
+  }, [nearbyResults, typeFilter, openNowOnly]);
+
+  const list = tab === 'nearby' ? filteredNearbyResults : filteredSearchResults;
+
+  const hasActiveFilters = typeFilter !== 'all' || openNowOnly;
+
+  const clearFilters = () => {
+    setTypeFilter('all');
+    setOpenNowOnly(false);
+  };
 
   return (
     <div className="explore-panel">
@@ -60,7 +139,7 @@ function ExplorePanel({
           className={`explore-tab ${tab === 'search' ? 'is-active' : ''}`}
           onClick={() => onTabChange('search')}
         >
-          Tous
+          <i className="bi bi-grid-fill"></i> Tous
         </button>
         <button
           className={`explore-tab ${tab === 'nearby' ? 'is-active' : ''}`}
@@ -73,20 +152,52 @@ function ExplorePanel({
         </button>
       </div>
 
+      {/* Filtres */}
+      <div className="explore-filters">
+        <select
+          className="explore-filter-select"
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+        >
+          <option value="all">Tous les types</option>
+          {FACILITY_TYPES.map((type) => (
+            <option key={type.value} value={type.value}>
+              {type.label}
+            </option>
+          ))}
+        </select>
+        <button
+          className={`explore-filter-toggle ${openNowOnly ? 'is-active' : ''}`}
+          onClick={() => setOpenNowOnly((v) => !v)}
+          title="Afficher uniquement les établissements ouverts maintenant"
+        >
+          <i className="bi bi-clock-fill"></i>
+          <span>Ouverts maintenant</span>
+        </button>
+        {hasActiveFilters && (
+          <button className="explore-filter-clear" onClick={clearFilters} title="Effacer les filtres">
+            <i className="bi bi-x-circle-fill"></i>
+          </button>
+        )}
+      </div>
+
       {tab === 'nearby' && geoError && (
         <div className="explore-empty">{geoError}</div>
       )}
 
       {tab === 'nearby' && nearbyLoading && (
-        <div className="explore-empty">Recherche des établissements proches…</div>
+        <div className="explore-empty">
+          <i className="bi bi-arrow-repeat spin"></i> Recherche des établissements proches…
+        </div>
       )}
 
       <div className="explore-list">
         {list.length === 0 && !nearbyLoading && (
           <div className="explore-empty">
+            <i className="bi bi-inbox" style={{ fontSize: 32, display: 'block', marginBottom: 8, opacity: 0.4 }}></i>
             {tab === 'nearby'
               ? 'Activez la géolocalisation pour voir les établissements les plus proches.'
-              : 'Aucun établissement trouvé.'}
+              : 'Aucun établissement trouvé avec ces filtres.'}
           </div>
         )}
         {list.map((item) => (
