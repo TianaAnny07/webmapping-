@@ -1,65 +1,31 @@
-// import axios from 'axios';
-
-// // ⚠️ En développement avec Expo Go sur un téléphone physique, remplacez "localhost"
-// // par l'adresse IP locale de votre machine (ex: http://192.168.1.10:3000/api/v1)
-// export const API_BASE_URL = 'http://localhost:3000/api/v1';
-// export const WS_BASE_URL = 'http://localhost:3000';
-
-// export const api = axios.create({ baseURL: API_BASE_URL, timeout: 15000 });
-
-// export async function searchFacilities(query: string) {
-//   const { data } = await api.get('/facilities/search', { params: { q: query } });
-//   return data;
-// }
-
-// export async function getFacility(id: string) {
-//   const { data } = await api.get(`/facilities/${id}`);
-//   return data;
-// }
-
-// export async function getAllFacilities(type?: 'hospital' | 'csb') {
-//   const { data } = await api.get('/facilities', { params: { type } });
-//   return data;
-// }
-
-// export async function getNearbyFacilities(lat: number, lon: number, radiusKm = 25, limit = 15) {
-//   const { data } = await api.get('/facilities/nearby', { params: { lat, lon, radiusKm, limit } });
-//   return data;
-// }
-
-// export async function getItinerary(
-//   fromLat: number, fromLon: number, toLat: number, toLon: number,
-//   profile: 'driving' | 'walking' = 'driving',
-// ) {
-//   const { data } = await api.get('/routing/itinerary', {
-//     params: { fromLat, fromLon, toLat, toLon, profile },
-//   });
-//   return data as { distanceMeters: number; durationSeconds: number; geometry: [number, number][] };
-// }
-
 import axios from 'axios';
-import { Facility, FacilityType } from '../types';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Facility, FacilityType, Itinerary, TravelMode } from '../types';
+import { haversineKm } from '../services/Geo';
 
 // ⚠️ À ADAPTER : mettez l'adresse IP locale de votre PC (celle qui fait tourner le backend NestJS),
 // pas "localhost" — sur un téléphone physique / Expo Go, "localhost" désigne le téléphone lui-même.
 // - Simulateur iOS (Mac)       : http://localhost:5000
 // - Émulateur Android          : http://10.0.2.2:5000
 // - Téléphone physique + Wi-Fi : http://<IP_LOCALE_DE_VOTRE_PC>:5000  (ex: http://192.168.1.10:5000)
-//   → trouvez votre IP avec `ipconfig` (Windows) ou `ifconfig` / `ip a` (Mac/Linux)
-export const API_BASE_URL = 'http://localhost:5000';
-
-// Le backend NestJS actuel n'a pas de serveur WebSocket (voir AlertContext.tsx) :
-// cette URL n'est donc pas utilisée pour l'instant, gardée pour référence future.
-export const WS_BASE_URL = API_BASE_URL;
+export const API_BASE_URL = 'http://192.168.1.217:5000';
+export const WS_BASE_URL = API_BASE_URL; // conservé pour référence, non utilisé actuellement
 
 export const api = axios.create({ baseURL: API_BASE_URL, timeout: 15000 });
 
+// Attache le token JWT à chaque requête, comme le fait frontend/src/services/api.js.
+api.interceptors.request.use(async (config) => {
+  const token = await AsyncStorage.getItem('token');
+  if (token) {
+    config.headers = config.headers ?? {};
+    (config.headers as any).Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 // ---------------------------------------------------------------------------
-// Le backend NestJS de ce projet n'expose que :
-//   GET /facilities/geojson   → toutes les formations sanitaires (GeoJSON)
-// Il n'y a pas de routes /facilities/search, /facilities/nearby, /facilities/:id
-// ni /routing/itinerary. On récupère donc TOUTES les données une seule fois,
-// et on fait la recherche, le filtrage "à proximité" et le tri, ici, côté mobile.
+// Établissements (le backend n'expose que GET /facilities/geojson — le reste
+// -- recherche, "à proximité", tri -- se fait ici, côté client, comme sur le web).
 // ---------------------------------------------------------------------------
 
 interface BackendFacilityProperties {
@@ -77,6 +43,8 @@ interface BackendFacilityProperties {
   is24h: boolean;
   phone: string | null;
   services: string | null;
+  description: string | null;
+  photoUrl: string | null;
 }
 
 interface BackendFeature {
@@ -90,15 +58,11 @@ interface BackendFeatureCollection {
   features: BackendFeature[];
 }
 
-// Cache mémoire simple pour éviter de re-télécharger tout le jeu de données
-// à chaque recherche / calcul de proximité pendant la session.
 let facilitiesCache: Facility[] | null = null;
 let facilitiesCacheAt = 0;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 function classifyType(props: BackendFacilityProperties): FacilityType {
-  // Le backend n'a pas de champ "type" hôpital/CSB dédié : on déduit
-  // à partir de amenity / healthcare, comme le fait le jeu de données OSM d'origine.
   if (props.amenity === 'hospital' || props.healthcare === 'hospital') return 'hospital';
   return 'csb';
 }
@@ -126,13 +90,17 @@ function mapToFacility(feature: BackendFeature): Facility | null {
     region: props.adm1Name || undefined,
     district: props.adm2Name || undefined,
     address: props.adm3Name || undefined,
-    // Ces champs n'existent pas dans les données du backend actuel :
-    // on met des valeurs par défaut pour que l'UI mobile (qui les attend) ne casse pas.
     beds: 0,
     staff: 0,
     accessibility: 'medium',
     status: 'operational',
     phone: props.phone || undefined,
+    services: props.services || undefined,
+    description: props.description || undefined,
+    photoUrl: props.photoUrl || undefined,
+    openingTime: props.openingTime || undefined,
+    closingTime: props.closingTime || undefined,
+    is24h: !!props.is24h,
     hours: buildHours(props),
   };
 }
@@ -143,22 +111,15 @@ async function fetchAllFacilities(): Promise<Facility[]> {
     return facilitiesCache;
   }
   const { data } = await api.get<BackendFeatureCollection>('/facilities/geojson');
-  const mapped = data.features
-    .map(mapToFacility)
-    .filter((f): f is Facility => f !== null);
+  const mapped = data.features.map(mapToFacility).filter((f): f is Facility => f !== null);
   facilitiesCache = mapped;
   facilitiesCacheAt = now;
   return mapped;
 }
 
-function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+/** Invalide le cache local (utile après un pull-to-refresh). */
+export function invalidateFacilitiesCache() {
+  facilitiesCache = null;
 }
 
 export async function searchFacilities(query: string): Promise<Facility[]> {
@@ -194,39 +155,133 @@ export async function getNearbyFacilities(
 }
 
 // ---------------------------------------------------------------------------
-// Itinéraire : le backend n'a pas de route /routing/itinerary, donc on appelle
-// directement le service public OSRM, exactement comme le fait le frontend web
-// (voir frontend/src/components/Routing.jsx et frontend/src/config.js).
+// Itinéraire — on utilise maintenant un VRAI profil de routage par mode
+// (piéton / vélo / voiture) via le serveur public FOSSGIS, qui héberge les
+// 3 profils OSRM séparément. C'est ce qui permet, à pied notamment, d'avoir
+// un vrai chemin piéton (raccourcis, sentiers) et pas seulement la route
+// carrossable recalculée avec une vitesse plus lente.
+// Si ce serveur est indisponible, on retombe sur le serveur public OSRM
+// standard (profil "voiture" uniquement), avec une durée estimée à partir
+// d'une vitesse moyenne par mode — comme le fait le web.
 // ---------------------------------------------------------------------------
 
-const OSRM_URL = 'https://router.project-osrm.org/route/v1';
+const OSRM_ENDPOINTS: Record<TravelMode, { url: string; profile: string }> = {
+  walking: { url: 'https://routing.openstreetmap.de/routed-foot/route/v1', profile: 'foot' },
+  cycling: { url: 'https://routing.openstreetmap.de/routed-bike/route/v1', profile: 'bike' },
+  driving: { url: 'https://routing.openstreetmap.de/routed-car/route/v1', profile: 'driving' },
+};
+const FALLBACK_OSRM_URL = 'https://router.project-osrm.org/route/v1/driving';
+
+export const MODE_SPEEDS_KMH: Record<TravelMode, number> = {
+  walking: 5,
+  cycling: 40, // "Moto" dans l'interface
+  driving: 45,
+};
+
+function mapRoute(route: any, mode: TravelMode, realDuration: boolean): Itinerary {
+  const geometry: [number, number][] = route.geometry.coordinates.map(
+    ([lon, lat]: [number, number]) => [lat, lon],
+  );
+  // Si la durée vient d'un vrai profil piéton/vélo/voiture, on la garde telle
+  // quelle (calibrée). Sinon (repli sur le profil voiture générique), on
+  // l'estime avec une vitesse moyenne par mode.
+  const durationSeconds = realDuration
+    ? route.duration
+    : (route.distance / 1000 / (MODE_SPEEDS_KMH[mode] || MODE_SPEEDS_KMH.driving)) * 3600;
+
+  const steps = (route.legs || []).flatMap((leg: any) =>
+    (leg.steps || []).map((s: any) => ({
+      type: s.maneuver.type,
+      modifier: s.maneuver.modifier,
+      distanceMeters: s.distance,
+      location: [s.maneuver.location[1], s.maneuver.location[0]] as [number, number],
+      streetName: s.name,
+    })),
+  );
+
+  return { distanceMeters: route.distance, durationSeconds, geometry, steps };
+}
+
+async function fetchOsrmRoutes(
+  fromLat: number, fromLon: number, toLat: number, toLon: number, mode: TravelMode, alternatives: boolean,
+): Promise<{ routes: any[]; realDuration: boolean }> {
+  const endpoint = OSRM_ENDPOINTS[mode];
+  try {
+    const url = `${endpoint.url}/${endpoint.profile}/${fromLon},${fromLat};${toLon},${toLat}`;
+    const { data } = await axios.get(url, {
+      params: { overview: 'full', geometries: 'geojson', steps: true, alternatives },
+      timeout: 12000,
+    });
+    if (data?.routes?.length) return { routes: data.routes, realDuration: true };
+  } catch {
+    // Serveur dédié indisponible → on retombe sur le profil voiture générique ci-dessous.
+  }
+  const url = `${FALLBACK_OSRM_URL}/${fromLon},${fromLat};${toLon},${toLat}`;
+  const { data } = await axios.get(url, {
+    params: { overview: 'full', geometries: 'geojson', steps: true, alternatives },
+    timeout: 15000,
+  });
+  return { routes: data?.routes || [], realDuration: false };
+}
 
 export async function getItinerary(
   fromLat: number,
   fromLon: number,
   toLat: number,
   toLon: number,
-  profile: 'driving' | 'walking' = 'driving',
-): Promise<{ distanceMeters: number; durationSeconds: number; geometry: [number, number][] }> {
-  const url = `${OSRM_URL}/${profile}/${fromLon},${fromLat};${toLon},${toLat}`;
-  const { data } = await axios.get(url, {
-    params: { overview: 'full', geometries: 'geojson' },
-    timeout: 15000,
-  });
+  mode: TravelMode = 'driving',
+): Promise<Itinerary> {
+  const { routes, realDuration } = await fetchOsrmRoutes(fromLat, fromLon, toLat, toLon, mode, false);
+  const route = routes[0];
+  if (!route) throw new Error('Aucun itinéraire trouvé.');
+  return mapRoute(route, mode, realDuration);
+}
 
-  const route = data?.routes?.[0];
-  if (!route) {
-    throw new Error("Aucun itinéraire trouvé.");
+/**
+ * Renvoie plusieurs propositions d'itinéraire (quand le serveur en trouve) :
+ * la plus courte en distance, et la "recommandée" (celle que le moteur de
+ * routage privilégie). Pour la marche à pied notamment, ça permet à
+ * l'utilisateur de choisir un chemin plus court plutôt que le plus "roulant".
+ * Note : les alternatives dépendent de la zone — si une seule route existe,
+ * elle est renvoyée seule, marquée "recommended".
+ */
+export async function getItineraryOptions(
+  fromLat: number,
+  fromLon: number,
+  toLat: number,
+  toLon: number,
+  mode: TravelMode = 'driving',
+): Promise<Itinerary[]> {
+  const { routes, realDuration } = await fetchOsrmRoutes(fromLat, fromLon, toLat, toLon, mode, true);
+  if (routes.length === 0) throw new Error('Aucun itinéraire trouvé.');
+
+  const mapped = routes.map((r: any) => mapRoute(r, mode, realDuration));
+
+  if (mapped.length === 1) {
+    mapped[0].label = 'recommended';
+    return mapped;
   }
 
-  // OSRM renvoie les coordonnées en [lon, lat] ; l'app mobile attend [lat, lon].
-  const geometry: [number, number][] = route.geometry.coordinates.map(
-    ([lon, lat]: [number, number]) => [lat, lon],
+  // La plus courte en distance devient "shortest", celle que le moteur classe
+  // en premier (généralement la plus rapide/directe) reste "recommended".
+  const shortestIdx = mapped.reduce(
+    (best: number, r: Itinerary, i: number) => (r.distanceMeters < mapped[best].distanceMeters ? i : best),
+    0,
   );
+  mapped.forEach((r: Itinerary, i: number) => {
+    r.label = i === 0 ? 'recommended' : i === shortestIdx ? 'shortest' : `alt-${i}`;
+  });
+  if (shortestIdx === 0) mapped[0].label = 'recommended';
 
-  return {
-    distanceMeters: route.distance,
-    durationSeconds: route.duration,
-    geometry,
-  };
+  // Dédoublonne : si deux options ont quasi la même distance/durée, n'en garde qu'une.
+  const unique: Itinerary[] = [];
+  for (const r of mapped) {
+    const dup = unique.find((u) => Math.abs(u.distanceMeters - r.distanceMeters) < 50);
+    if (!dup) unique.push(r);
+  }
+  return unique;
 }
+
+
+
+

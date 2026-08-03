@@ -1,99 +1,186 @@
-import { View, Text, StyleSheet, TouchableOpacity, Linking, ScrollView } from 'react-native';
+import { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { RootStackParamList } from '../types';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList, Itinerary, TravelMode } from '../types';
+import { getItineraryOptions, MODE_SPEEDS_KMH } from '../services/api';
+import { getCurrentPosition, requestLocationPermission } from '../services/location';
+import { formatDistance, formatDuration } from '../services/Geo';
+import { useTheme } from '../context/Themecontext';
+import FacilityInfoCard from '../components/FacilityInfoCard';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'FacilityDetail'>;
 
-const ACC_LABEL: Record<string, string> = { high: 'Haute', medium: 'Moyenne', low: 'Faible' };
-const ACC_COLOR: Record<string, string> = { high: '#00c9a7', medium: '#f59e0b', low: '#ef4444' };
+const MODES: { key: TravelMode; label: string; icon: any }[] = [
+  { key: 'walking', label: 'À pied', icon: 'walk' },
+  { key: 'cycling', label: 'Moto', icon: 'bicycle' },
+  { key: 'driving', label: 'Voiture', icon: 'car' },
+];
+
+const LABEL_TEXT: Record<string, string> = { recommended: 'Recommandé', shortest: 'Le plus court' };
+const LABEL_ICON: Record<string, any> = { recommended: 'star', shortest: 'flash' };
 
 export default function FacilityDetailScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<Props['route']>();
   const { facility } = route.params;
+  const { colors } = useTheme();
+
+  const [previewMode, setPreviewMode] = useState<TravelMode | null>(null);
+  const [options, setOptions] = useState<Itinerary[]>([]);
+  const [selectedIdx, setSelectedIdx] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handlePreview = useCallback(
+    async (mode: TravelMode) => {
+      setPreviewMode(mode);
+      setOptions([]);
+      setSelectedIdx(0);
+      setError('');
+      setLoading(true);
+      try {
+        const granted = await requestLocationPermission();
+        if (!granted) {
+          setError('Autorisation de localisation refusée.');
+          return;
+        }
+        const pos = await getCurrentPosition();
+        const result = await getItineraryOptions(pos.latitude, pos.longitude, facility.latitude, facility.longitude, mode);
+        setOptions(result);
+      } catch {
+        setError("Impossible de calculer l'itinéraire pour le moment.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [facility],
+  );
+
+  const handleValidate = () => {
+    const chosen = options[selectedIdx];
+    if (!chosen || !previewMode) return;
+    navigation.navigate('Route', { facility, mode: previewMode, itinerary: chosen });
+  };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
+    <ScrollView style={[styles.container, { backgroundColor: colors.bg }]} contentContainerStyle={{ paddingBottom: 40 }}>
       <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-        <Ionicons name="arrow-back" size={20} color="#1e293b" />
+        <Ionicons name="arrow-back" size={20} color={colors.textPrimary} />
       </TouchableOpacity>
 
       <View style={styles.header}>
-        <View style={[styles.badge, { backgroundColor: facility.type === 'hospital' ? '#00c9a71a' : '#f59e0b1a' }]}>
-          <Ionicons name={facility.type === 'hospital' ? 'medkit' : 'heart'} size={26} color={facility.type === 'hospital' ? '#00c9a7' : '#f59e0b'} />
-        </View>
-        <Text style={styles.title}>{facility.name}</Text>
-        <Text style={styles.subtitle}>{facility.region} — {facility.district}</Text>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>{facility.name}</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{facility.region} — {facility.district}</Text>
       </View>
 
-      <View style={styles.statsRow}>
-        <View style={styles.statBox}>
-          <Text style={styles.statValue}>{facility.beds}</Text>
-          <Text style={styles.statLabel}>Lits</Text>
-        </View>
-        <View style={styles.statBox}>
-          <Text style={styles.statValue}>{facility.staff}</Text>
-          <Text style={styles.statLabel}>Personnel</Text>
-        </View>
-        <View style={styles.statBox}>
-          <Text style={[styles.statValue, { color: ACC_COLOR[facility.accessibility] }]}>
-            {ACC_LABEL[facility.accessibility]}
-          </Text>
-          <Text style={styles.statLabel}>Accessibilité</Text>
-        </View>
+      <View style={{ marginHorizontal: 20, marginTop: 16 }}>
+        <FacilityInfoCard facility={facility} />
       </View>
 
-      <View style={styles.infoList}>
-        {facility.hours && (
-          <View style={styles.infoRow}>
-            <Ionicons name="time-outline" size={18} color="#64748b" />
-            <Text style={styles.infoText}>{facility.hours}</Text>
-          </View>
-        )}
-        {facility.phone && (
-          <TouchableOpacity style={styles.infoRow} onPress={() => Linking.openURL(`tel:${facility.phone}`)}>
-            <Ionicons name="call-outline" size={18} color="#64748b" />
-            <Text style={[styles.infoText, { color: '#00c9a7' }]}>{facility.phone}</Text>
+      <View style={styles.sectionTitleRow}>
+        <Ionicons name="navigate-circle-outline" size={16} color={colors.textSecondary} />
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Itinéraire</Text>
+      </View>
+
+      <View style={styles.modes}>
+        {MODES.map((m) => (
+          <TouchableOpacity
+            key={m.key}
+            style={[
+              styles.modeBtn,
+              { backgroundColor: colors.card, borderColor: previewMode === m.key ? colors.accent : colors.border },
+            ]}
+            onPress={() => handlePreview(m.key)}
+          >
+            <Ionicons name={m.icon} size={20} color={previewMode === m.key ? colors.accent : colors.textSecondary} />
+            <Text style={[styles.modeLabel, { color: previewMode === m.key ? colors.accent : colors.textPrimary }]}>{m.label}</Text>
+            <Text style={[styles.modeSpeed, { color: colors.textSecondary }]}>{MODE_SPEEDS_KMH[m.key]} km/h</Text>
           </TouchableOpacity>
-        )}
-        <View style={styles.infoRow}>
-          <Ionicons name="checkmark-circle-outline" size={18} color="#64748b" />
-          <Text style={styles.infoText}>
-            Statut: {facility.status === 'operational' ? 'Opérationnel' : facility.status === 'limited' ? 'Service limité' : 'Fermé'}
-          </Text>
-        </View>
+        ))}
       </View>
 
-      <TouchableOpacity
-        style={styles.routeBtn}
-        onPress={() => navigation.navigate('Route', { facility })}
-      >
-        <Ionicons name="navigate" size={18} color="#fff" />
-        <Text style={styles.routeBtnText}>Voir l'itinéraire</Text>
-      </TouchableOpacity>
+      {loading && (
+        <View style={styles.previewLoading}>
+          <ActivityIndicator color={colors.accent} />
+          <Text style={{ color: colors.textSecondary, marginTop: 6 }}>Recherche des itinéraires…</Text>
+        </View>
+      )}
+
+      {error !== '' && !loading && <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>}
+
+      {options.length > 0 && !loading && previewMode && (
+        <View style={{ marginHorizontal: 20, marginTop: 16, gap: 10 }}>
+          <Text style={[styles.optionsHint, { color: colors.textSecondary }]}>
+            {options.length > 1 ? `${options.length} itinéraires trouvés — choisissez le vôtre :` : 'Itinéraire trouvé :'}
+          </Text>
+          {options.map((opt, idx) => {
+            const selected = idx === selectedIdx;
+            return (
+              <TouchableOpacity
+                key={idx}
+                onPress={() => setSelectedIdx(idx)}
+                style={[
+                  styles.optionCard,
+                  { backgroundColor: colors.card, borderColor: selected ? colors.accent : colors.border },
+                ]}
+              >
+                <View style={[styles.optionRadio, { borderColor: selected ? colors.accent : colors.border }]}>
+                  {selected && <View style={[styles.optionRadioDot, { backgroundColor: colors.accent }]} />}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.optionTopRow}>
+                    {opt.label && LABEL_TEXT[opt.label] && (
+                      <View style={[styles.optionBadge, { backgroundColor: colors.accent + '22' }]}>
+                        <Ionicons name={LABEL_ICON[opt.label]} size={11} color={colors.accent} />
+                        <Text style={[styles.optionBadgeText, { color: colors.accent }]}>{LABEL_TEXT[opt.label]}</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={[styles.optionStats, { color: colors.textPrimary }]}>
+                    {formatDistance(opt.distanceMeters)} · {formatDuration(opt.durationSeconds)}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+
+          <TouchableOpacity style={[styles.validateBtn, { backgroundColor: colors.accent }]} onPress={handleValidate}>
+            <Ionicons name="checkmark" size={18} color="#fff" />
+            <Text style={styles.validateBtnText}>Démarrer la navigation</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  container: { flex: 1 },
   backBtn: { marginTop: 55, marginLeft: 16 },
   header: { alignItems: 'center', marginTop: 10, paddingHorizontal: 20 },
-  badge: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  title: { fontSize: 19, fontWeight: '700', color: '#1e293b', textAlign: 'center' },
-  subtitle: { fontSize: 13, color: '#94a3b8', marginTop: 4 },
-  statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 24, paddingHorizontal: 20 },
-  statBox: { alignItems: 'center' },
-  statValue: { fontSize: 16, fontWeight: '700', color: '#1e293b' },
-  statLabel: { fontSize: 11, color: '#94a3b8', marginTop: 2 },
-  infoList: { marginTop: 28, paddingHorizontal: 20, gap: 14 },
-  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  infoText: { fontSize: 14, color: '#334155' },
-  routeBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: '#00c9a7', marginHorizontal: 20, marginTop: 32, paddingVertical: 14, borderRadius: 14,
+  title: { fontSize: 19, fontWeight: '700', textAlign: 'center' },
+  subtitle: { fontSize: 13, marginTop: 4 },
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 22, marginHorizontal: 20 },
+  sectionTitle: { fontSize: 13, fontWeight: '700', textTransform: 'uppercase' },
+  modes: { flexDirection: 'row', gap: 8, marginHorizontal: 20, marginTop: 12 },
+  modeBtn: { flex: 1, borderWidth: 1.5, borderRadius: 14, paddingVertical: 12, alignItems: 'center', gap: 4 },
+  modeLabel: { fontSize: 12.5, fontWeight: '600' },
+  modeSpeed: { fontSize: 10.5 },
+  previewLoading: { alignItems: 'center', marginTop: 20 },
+  errorText: { textAlign: 'center', marginTop: 16, marginHorizontal: 20, fontSize: 13 },
+  optionsHint: { fontSize: 12, marginBottom: 2 },
+  optionCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1.5,
+    borderRadius: 14, padding: 14,
   },
-  routeBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  optionRadio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  optionRadioDot: { width: 10, height: 10, borderRadius: 5 },
+  optionTopRow: { flexDirection: 'row', marginBottom: 4 },
+  optionBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  optionBadgeText: { fontSize: 10.5, fontWeight: '700' },
+  optionStats: { fontSize: 14, fontWeight: '700' },
+  validateBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 14, marginTop: 6 },
+  validateBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 });
