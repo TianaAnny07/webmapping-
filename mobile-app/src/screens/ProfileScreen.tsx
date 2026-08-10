@@ -5,8 +5,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/Themecontext';
+import { useLanguage } from '../context/LanguageContext';
 import { authService } from '../services/auth';
-
+import * as Speech from 'expo-speech';
 /**
  * Écran "Mon profil / Paramètres".
  * - Toucher la PHOTO elle-même → l'affiche simplement en grand (aperçu).
@@ -15,10 +16,13 @@ import { authService } from '../services/auth';
  * auth partagé — ce qui rafraîchit automatiquement l'icône de l'onglet
  * "Profil" dans la barre du bas (voir AppNavigator.tsx).
  */
+
+
 export default function ProfileScreen() {
   const navigation = useNavigation<any>();
   const { user, logout, updateUser } = useAuth();
   const { isDark, toggleTheme, colors } = useTheme();
+ const { t } = useLanguage();
 
   const [username, setUsername] = useState(user?.username || '');
   const [avatar, setAvatar] = useState<string | null | undefined>(user?.avatar);
@@ -168,6 +172,8 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
+      
+
       <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginTop: 20 }]}>
         <Ionicons name="lock-closed" size={12} /> Changer le mot de passe
       </Text>
@@ -231,6 +237,7 @@ const styles = StyleSheet.create({
   themeTitle: { fontSize: 13.5, fontWeight: '600' },
   themeSub: { fontSize: 12, marginTop: 2 },
   themeSwitch: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  
   saveBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     borderRadius: 14, paddingVertical: 14, marginTop: 22,

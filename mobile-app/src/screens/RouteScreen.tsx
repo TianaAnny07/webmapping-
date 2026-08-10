@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -14,11 +15,19 @@ import NavigationGuide from '../components/NavigationGuide';
 import FacilityInfoCard from '../components/FacilityInfoCard';
 import FloatingMarker from '../components/FloatingMarker';
 import { useTheme } from '../context/Themecontext';
+import { useLanguage } from '../context/LanguageContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Route'>;
 
-const OFF_ROUTE_THRESHOLD_M = 300;
-const ARRIVAL_THRESHOLD_M = 60;
+// ⚠️ Seuil de détection "hors itinéraire", en mètres. Un smartphone a
+// normalement une précision GPS de 5 à 15 m, même à l'arrêt — un seuil
+// trop bas (proche de 1 m) déclenchera l'alerte en continu à cause du
+// simple bruit du signal, pas d'un vrai écart de trajet. 15 m est déjà
+// très réactif ; ajustez cette valeur ici selon vos tests sur le terrain.
+const OFF_ROUTE_THRESHOLD_M = 15;
+// Seuil resserré : on n'annonce "arrivé" que tout près de la vraie
+// destination (avant : 60 m, ce qui déclenchait l'annonce trop tôt).
+const ARRIVAL_THRESHOLD_M = 20;
 const STEP_ARRIVAL_THRESHOLD_M = 30;
 
 export default function RouteScreen() {
@@ -26,8 +35,11 @@ export default function RouteScreen() {
   const routeParams = useRoute<Props['route']>();
   const { facility, mode } = routeParams.params;
   const { colors } = useTheme();
+  const { language } = useLanguage();
   const mapRef = useRef<MapView>(null);
   const watchSub = useRef<{ remove: () => void } | null>(null);
+  const hasFitRoute = useRef(false);
+  const wasOffRoute = useRef(false); // pour ne déclencher l'alerte qu'au moment où on SORT de l'itinéraire, pas en boucle
 
   const [itinerary, setItinerary] = useState<Itinerary>(routeParams.params.itinerary);
   const [userPos, setUserPos] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -36,16 +48,30 @@ export default function RouteScreen() {
   const [arrived, setArrived] = useState(false);
   const [voiceOn, setVoiceOn] = useState(isVoiceEnabled());
   const [recalculating, setRecalculating] = useState(false);
-  const [infoExpanded, setInfoExpanded] = useState(false);
 
   const steps = itinerary.steps;
   const currentStep = steps[stepIndex];
   const nextStep = steps[stepIndex + 1];
 
+  // 1) Zoom directement sur l'itinéraire dès le démarrage de la navigation,
+  //    au lieu d'une vue large centrée sur la destination.
+  useEffect(() => {
+    if (hasFitRoute.current || itinerary.geometry.length === 0) return;
+    const coords = itinerary.geometry.map(([lat, lon]) => ({ latitude: lat, longitude: lon }));
+    const t = setTimeout(() => {
+      mapRef.current?.fitToCoordinates(coords, {
+        edgePadding: { top: 140, right: 60, bottom: 260, left: 60 },
+        animated: true,
+      });
+      hasFitRoute.current = true;
+    }, 300); // léger délai pour laisser la MapView finir son montage natif
+    return () => clearTimeout(t);
+  }, [itinerary]);
+
   // Annonce vocale au démarrage puis à chaque changement d'étape.
   useEffect(() => {
     if (!currentStep) return;
-    const { text } = describeStep(currentStep);
+    const { text } = describeStep(currentStep, language);
     speak(text);
   }, [stepIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -78,7 +104,17 @@ export default function RouteScreen() {
       });
 
       const off = distanceToRouteMeters(coords.latitude, coords.longitude, itinerary.geometry);
-      setOffRouteM(off > OFF_ROUTE_THRESHOLD_M ? off : null);
+      const isOffNow = off > OFF_ROUTE_THRESHOLD_M;
+      setOffRouteM(isOffNow ? off : null);
+
+      // 2) Alerte renforcée (vibration + voix) au moment précis où l'on
+      // sort de l'itinéraire — une seule fois, pas à chaque mise à jour
+      // GPS tant qu'on reste hors route.
+      if (isOffNow && !wasOffRoute.current) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+        speak("Attention, vous semblez être hors de l'itinéraire prévu.");
+      }
+      wasOffRoute.current = isOffNow;
     }).then((sub) => {
       watchSub.current = sub;
     });
@@ -92,6 +128,8 @@ export default function RouteScreen() {
       const result = await getItinerary(userPos.latitude, userPos.longitude, facility.latitude, facility.longitude, mode);
       setItinerary(result);
       setStepIndex(0);
+      hasFitRoute.current = false; // permet un nouveau fitToCoordinates sur le nouveau tracé
+      wasOffRoute.current = false;
       setOffRouteM(null);
     } catch {
       // silencieux : l'utilisateur peut réessayer via le même bouton
@@ -125,12 +163,12 @@ export default function RouteScreen() {
         initialRegion={{
           latitude: userPos?.latitude ?? facility.latitude,
           longitude: userPos?.longitude ?? facility.longitude,
-          latitudeDelta: 0.2,
-          longitudeDelta: 0.2,
+          latitudeDelta: 0.05,
+          longitudeDelta: 0.05,
         }}
         showsUserLocation
       >
-        <FloatingMarker coordinate={{ latitude: facility.latitude, longitude: facility.longitude }} type={facility.type} />
+        <FloatingMarker coordinate={{ latitude: facility.latitude, longitude: facility.longitude }} category={facility.category} />
         {coords.length > 0 && <Polyline coordinates={coords} strokeColor={colors.accent} strokeWidth={5} />}
       </MapView>
 
@@ -161,47 +199,29 @@ export default function RouteScreen() {
       )}
 
       <View style={[styles.bottomSheet, { backgroundColor: colors.card }]}>
-        <TouchableOpacity style={styles.destRow} onPress={() => setInfoExpanded((v) => !v)} activeOpacity={0.7}>
-          <View style={[styles.destBadge, { backgroundColor: facility.type === 'hospital' ? '#00c9a71a' : '#f59e0b1a' }]}>
-            <Ionicons
-              name={facility.type === 'hospital' ? 'medkit' : 'bandage'}
-              size={22}
-              color={facility.type === 'hospital' ? '#00c9a7' : '#f59e0b'}
-            />
-          </View>
-          <View style={styles.destTextWrap}>
-            {arrived ? (
-              <View style={styles.arrivedRow}>
-                <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
-                <Text style={[styles.destName, { color: colors.textPrimary }]}>Vous êtes arrivé</Text>
-              </View>
-            ) : (
-              <Text style={[styles.destName, { color: colors.textPrimary }]} numberOfLines={1}>{facility.name}</Text>
-            )}
-            <Text style={[styles.routeInfo, { color: colors.textSecondary }]} numberOfLines={1}>
-              {arrived
-                ? facility.name
-                : `${formatDistance(itinerary.distanceMeters)} · ${formatDuration(itinerary.durationSeconds)} · ${MODE_SPEEDS_KMH[mode]} km/h`}
-            </Text>
-          </View>
-          <Ionicons name={infoExpanded ? 'chevron-down' : 'chevron-up'} size={18} color={colors.textSecondary} />
-        </TouchableOpacity>
-
-        {infoExpanded && (
-          <ScrollView style={styles.infoExpandedScroll} showsVerticalScrollIndicator={false}>
-            <FacilityInfoCard facility={facility} compact />
-          </ScrollView>
-        )}
-
         {arrived ? (
-          <TouchableOpacity style={[styles.stopBtn, { backgroundColor: colors.accent }]} onPress={handleStop}>
-            <Text style={styles.stopBtnText}>Terminer</Text>
-          </TouchableOpacity>
+          <>
+            <View style={styles.arrivedRow}>
+              <Ionicons name="checkmark-circle" size={22} color={colors.accent} />
+              <Text style={[styles.destName, { color: colors.textPrimary }]}>Vous êtes arrivé</Text>
+            </View>
+            <FacilityInfoCard facility={facility} compact />
+            <TouchableOpacity style={[styles.stopBtn, { backgroundColor: colors.accent }]} onPress={handleStop}>
+              <Text style={styles.stopBtnText}>Terminer</Text>
+            </TouchableOpacity>
+          </>
         ) : (
-          <TouchableOpacity style={[styles.stopBtn, { backgroundColor: colors.danger }]} onPress={handleStop}>
-            <Ionicons name="stop-circle" size={18} color="#fff" />
-            <Text style={styles.stopBtnText}>Arrêter la navigation</Text>
-          </TouchableOpacity>
+          <>
+            <Text style={[styles.destName, { color: colors.textPrimary }]}>{facility.name}</Text>
+            <Text style={[styles.routeInfo, { color: colors.textSecondary }]}>
+              {formatDistance(itinerary.distanceMeters)} · {formatDuration(itinerary.durationSeconds)} · {MODE_SPEEDS_KMH[mode]} km/h
+            </Text>
+            <FacilityInfoCard facility={facility} compact />
+            <TouchableOpacity style={[styles.stopBtn, { backgroundColor: colors.danger }]} onPress={handleStop}>
+              <Ionicons name="stop-circle" size={18} color="#fff" />
+              <Text style={styles.stopBtnText}>Arrêter la navigation</Text>
+            </TouchableOpacity>
+          </>
         )}
       </View>
     </View>
@@ -222,15 +242,11 @@ const styles = StyleSheet.create({
   alertActionText: { color: '#fff', fontSize: 11, fontWeight: '700' },
   bottomSheet: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 34, elevation: 8,
+    borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 34, elevation: 8, gap: 12,
   },
-  destRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
-  infoExpandedScroll: { maxHeight: 160, marginBottom: 12 },
-  destBadge: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  destTextWrap: { flex: 1 },
   arrivedRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   destName: { fontSize: 16, fontWeight: '700' },
-  routeInfo: { fontSize: 13, marginTop: 4 },
+  routeInfo: { fontSize: 13, marginTop: -6 },
   stopBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 14 },
   stopBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 });

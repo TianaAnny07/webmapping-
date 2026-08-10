@@ -13,10 +13,12 @@ interface Props {
  * Description composée à partir des vraies données disponibles :
  * description du backend si renseignée, sinon région/district + horaires.
  */
+import { CATEGORY_META } from '../services/facilityCategories';
+
 function buildDescription(f: Facility): string {
   if (f.description && f.description.trim()) return f.description.trim();
   const parts: string[] = [];
-  const kind = f.type === 'hospital' ? 'Hôpital' : 'Centre de santé de base (CSB)';
+  const kind = CATEGORY_META[f.category]?.label || (f.type === 'hospital' ? 'Hôpital' : 'Centre de santé de base (CSB)');
   parts.push(`${kind} situé à ${f.district || f.region || 'Madagascar'}.`);
   if (f.hours) parts.push(f.hours + '.');
   return parts.join(' ');

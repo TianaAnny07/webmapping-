@@ -44,6 +44,12 @@ export class Facility {
   @Column({ nullable: true })
   services!: string;
 
+  @Column({ type: 'text', nullable: true })
+  description!: string;
+
+  @Column({ name: 'photo_url', nullable: true })
+  photoUrl!: string;
+
   @Index({ spatial: true })
   @Column({
     type: 'geometry',
@@ -52,4 +58,4 @@ export class Facility {
     nullable: true,
   })
   geom!: object;
-} 
+}

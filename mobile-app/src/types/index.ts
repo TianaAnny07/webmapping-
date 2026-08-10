@@ -1,4 +1,7 @@
-export type FacilityType = 'hospital' | 'csb';
+import type { FacilityCategory } from '../services/facilityCategories';
+export type { FacilityCategory };
+
+export type FacilityType = 'hospital' | 'csb' | 'pharmacy';
 export type Accessibility = 'high' | 'medium' | 'low';
 export type FacilityStatus = 'operational' | 'limited' | 'closed';
 export type TravelMode = 'walking' | 'cycling' | 'driving';
@@ -7,6 +10,7 @@ export interface Facility {
   id: string;
   name: string;
   type: FacilityType;
+  category: FacilityCategory; // catégorie détaillée : chu, hospital, csb2, csb1, pharmacy, clinic, maternity, other
   level?: string;
   latitude: number;
   longitude: number;

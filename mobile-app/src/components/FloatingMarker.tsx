@@ -2,40 +2,35 @@ import { useEffect, useRef } from 'react';
 import { Animated, Easing, View, StyleSheet } from 'react-native';
 import { Marker } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
+import { CATEGORY_META, FacilityCategory } from '../services/facilityCategories';
 
 interface Props {
   coordinate: { latitude: number; longitude: number };
-  type: 'hospital' | 'csb';
+  category: FacilityCategory;
   /**
-   * 'nearby'  → utilisé pour TOUS les établissements proches de l'utilisateur
-   *             (badge rond, coloré selon l'accessibilité).
-   * 'search'  → utilisé pour l'établissement spécifiquement recherché ou
-   *             visé par la navigation (badge en forme d'épingle, violet,
-   *             clairement différent des badges "près de moi").
+   * 'nearby' → utilisé pour les établissements proches de l'utilisateur
+   *            (badge rond, couleur exacte de la catégorie).
+   * 'search' → utilisé pour l'établissement recherché ou la destination
+   *            de navigation (badge en épingle violette, plus grand,
+   *            clairement différent des badges "près de moi").
    */
   variant?: 'nearby' | 'search';
-  accentColor?: string; // pour 'nearby' : couleur d'accessibilité (vert/orange/rouge)
   onPress?: () => void;
 }
 
-// Icônes par type — jamais de cœur. 'medkit' pour un hôpital, 'bandage'
-// pour un CSB (soins de base), symboles médicaux neutres.
-const NEARBY_ICON: Record<'hospital' | 'csb', any> = { hospital: 'medkit', csb: 'bandage' };
-const SEARCH_ICON: Record<'hospital' | 'csb', any> = { hospital: 'medkit-outline', csb: 'bandage-outline' };
 const SEARCH_COLOR = '#8b5cf6';
 
 /**
- * Marqueur d'établissement animé (flotte doucement en boucle). Deux styles
- * selon `variant` : petit badge rond pour "près de moi", ou badge en
- * épingle plus grand et distinct pour l'établissement recherché / la
- * destination de navigation.
+ * Marqueur d'établissement animé (flotte doucement en boucle), utilisant
+ * la même source de vérité que la légende (constants/facilityCategories.ts).
  */
-export default function FloatingMarker({ coordinate, type, variant = 'search', accentColor, onPress }: Props) {
+export default function FloatingMarker({ coordinate, category, variant = 'search', onPress }: Props) {
   const bob = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(0)).current;
   const isSearch = variant === 'search';
-  const color = isSearch ? SEARCH_COLOR : accentColor || '#00c9a7';
-  const icon = isSearch ? SEARCH_ICON[type] : NEARBY_ICON[type];
+  const meta = CATEGORY_META[category];
+  const color = isSearch ? SEARCH_COLOR : meta.color;
+  const icon = meta.icon;
   const bobDistance = isSearch ? 9 : 5;
   const badgeSize = isSearch ? 36 : 28;
 
@@ -71,8 +66,6 @@ export default function FloatingMarker({ coordinate, type, variant = 'search', a
         />
         <Animated.View style={[styles.badgeWrap, { transform: [{ translateY: bob }] }]}>
           {isSearch ? (
-            // Variante "recherché" : badge en épingle (forme de goutte), pour
-            // se distinguer visuellement des badges ronds "près de moi".
             <View style={[styles.pinBadge, { backgroundColor: color }]}>
               <View style={styles.pinIconCounter}>
                 <Ionicons name={icon} size={18} color="#fff" />

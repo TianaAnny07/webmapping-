@@ -9,6 +9,9 @@ import { haversineKm } from '../services/Geo';
 import { Facility } from '../types';
 import { useTheme } from '../context/Themecontext';
 import FloatingMarker from '../components/FloatingMarker';
+import CategoryMarker from '../components/CategoryMarker';
+import { CATEGORY_META } from '../services/facilityCategories';
+import MapLegend from '../components/MapLegend';
 
 const ACC_COLOR: Record<string, string> = { high: '#00c9a7', medium: '#f59e0b', low: '#ef4444' };
 const NEARBY_RADIUS_KM = 3; // rayon "près de moi" pour les marqueurs flottants
@@ -119,26 +122,23 @@ export default function MapScreen() {
           if (highlightedFacility?.id === f.id) return null; // rendu séparément en flottant, ci-dessous
           if (nearbyIds.has(f.id)) return null; // idem : rendu en flottant "près de moi"
           return (
-            <Marker
+            <CategoryMarker
               key={f.id}
               coordinate={{ latitude: f.latitude, longitude: f.longitude }}
-              pinColor={ACC_COLOR[f.accessibility]}
-              title={f.name}
-              description={f.type === 'hospital' ? 'Hôpital' : 'CSB'}
-              onCalloutPress={() => navigation.navigate('FacilityDetail', { facility: f })}
+              category={f.category}
+              onPress={() => navigation.navigate('FacilityDetail', { facility: f })}
             />
           );
         })}
 
         {/* Tous les établissements proches de l'utilisateur flottent, avec
-            leur couleur d'accessibilité habituelle (vert/orange/rouge). */}
+            la couleur exacte de leur catégorie (même légende que sur la carte). */}
         {nearbyFacilities.map((f) => (
           <FloatingMarker
             key={f.id}
             coordinate={{ latitude: f.latitude, longitude: f.longitude }}
-            type={f.type}
+            category={f.category}
             variant="nearby"
-            accentColor={ACC_COLOR[f.accessibility]}
             onPress={() => navigation.navigate('FacilityDetail', { facility: f })}
           />
         ))}
@@ -146,7 +146,7 @@ export default function MapScreen() {
         {highlightedFacility && (
           <FloatingMarker
             coordinate={{ latitude: highlightedFacility.latitude, longitude: highlightedFacility.longitude }}
-            type={highlightedFacility.type}
+            category={highlightedFacility.category}
             variant="search"
             onPress={() => navigation.navigate('FacilityDetail', { facility: highlightedFacility })}
           />
@@ -193,9 +193,9 @@ export default function MapScreen() {
               renderItem={({ item }) => (
                 <TouchableOpacity style={styles.resultRow} onPress={() => handleSelectResult(item)}>
                   <Ionicons
-                    name={item.type === 'hospital' ? 'medkit' : 'bandage'}
+                    name={CATEGORY_META[item.category].icon}
                     size={16}
-                    color={item.type === 'hospital' ? '#00c9a7' : '#f59e0b'}
+                    color={CATEGORY_META[item.category].color}
                   />
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.resultName, { color: colors.textPrimary }]} numberOfLines={1}>{item.name}</Text>
@@ -220,15 +220,8 @@ export default function MapScreen() {
         <Ionicons name="locate" size={22} color={colors.textPrimary} />
       </TouchableOpacity>
 
-      <View style={[styles.legend, { backgroundColor: colors.card }]}>
-        {Object.entries(ACC_COLOR).map(([key, color]) => (
-          <View key={key} style={styles.legendItem}>
-            <View style={[styles.dot, { backgroundColor: color }]} />
-            <Text style={[styles.legendText, { color: colors.textSecondary }]}>
-              {key === 'high' ? 'Haute' : key === 'medium' ? 'Moyenne' : 'Faible'}
-            </Text>
-          </View>
-        ))}
+      <View style={styles.legendWrap}>
+        <MapLegend />
       </View>
     </View>
   );
@@ -251,8 +244,5 @@ const styles = StyleSheet.create({
   resultName: { fontSize: 13, fontWeight: '600' },
   resultSub: { fontSize: 11, marginTop: 1 },
   resultGo: { padding: 4 },
-  legend: { position: 'absolute', bottom: 30, left: 16, borderRadius: 12, padding: 10, elevation: 3 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  dot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
-  legendText: { fontSize: 11 },
+  legendWrap: { position: 'absolute', bottom: 30, left: 16 },
 });

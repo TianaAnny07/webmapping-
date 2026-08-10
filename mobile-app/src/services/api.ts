@@ -2,11 +2,8 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Facility, FacilityType, Itinerary, TravelMode } from '../types';
 import { haversineKm } from '../services/Geo';
+import { classifyFacilityCategory } from '../services/facilityCategories';
 
-// ⚠️ À ADAPTER : mettez l'adresse IP locale de votre PC (celle qui fait tourner le backend NestJS),
-// pas "localhost" — sur un téléphone physique / Expo Go, "localhost" désigne le téléphone lui-même.
-// - Simulateur iOS (Mac)       : http://localhost:5000
-// - Émulateur Android          : http://10.0.2.2:5000
 // - Téléphone physique + Wi-Fi : http://<IP_LOCALE_DE_VOTRE_PC>:5000  (ex: http://192.168.1.10:5000)
 export const API_BASE_URL = 'http://192.168.1.217:5000';
 export const WS_BASE_URL = API_BASE_URL; // conservé pour référence, non utilisé actuellement
@@ -63,6 +60,7 @@ let facilitiesCacheAt = 0;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 function classifyType(props: BackendFacilityProperties): FacilityType {
+  if (props.amenity === 'pharmacy') return 'pharmacy';
   if (props.amenity === 'hospital' || props.healthcare === 'hospital') return 'hospital';
   return 'csb';
 }
@@ -85,6 +83,8 @@ function mapToFacility(feature: BackendFeature): Facility | null {
     id: String(props.id),
     name: props.name || 'Établissement sans nom',
     type: classifyType(props),
+    category: classifyFacilityCategory(props),
+
     latitude,
     longitude,
     region: props.adm1Name || undefined,

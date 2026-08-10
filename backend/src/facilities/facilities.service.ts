@@ -20,7 +20,7 @@ export class FacilitiesService {
         id, name, amenity, healthcare, operator_type,
         adm1_name, adm2_name, adm3_name,
         opening_time, closing_time, opening_days,
-        is_24h, phone, services,
+        is_24h, phone, services, description, photo_url,
         ST_AsGeoJSON(geom)::json AS geometry
       FROM facilities
       WHERE geom IS NOT NULL
@@ -46,6 +46,8 @@ export class FacilitiesService {
           is24h: f.is_24h,
           phone: f.phone,
           services: f.services,
+          description: f.description,
+          photoUrl: f.photo_url,
         },
       })),
     };
@@ -159,6 +161,8 @@ async importFromGeoJson(file: Express.Multer.File) {
     adm3Name: data.adm3Name,
     phone: data.phone,
     services: data.services,
+    description: data.description,
+    photoUrl: data.photoUrl,
     openingTime: data.openingTime,
     closingTime: data.closingTime,
     openingDays: data.openingDays,
