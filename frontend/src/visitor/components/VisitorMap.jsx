@@ -175,7 +175,7 @@ function VisitorMap({
             onManualLocationClick={onMapClick}
           />
 
-          {userPosition && route?.active && <Marker position={userPosition} icon={userMarkerIcon} />}
+          {userPosition && <Marker position={userPosition} icon={userMarkerIcon} />}
 
           {route && route.geometry && (
             <>

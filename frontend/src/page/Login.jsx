@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { authService } from '../services/api';
 import './Auth.css';
+import illustration from '../assets/undraw_map_cuix-animated.svg'; 
 
 function Login() {
-  const [email,        setEmail]        = useState('');
-  const [password,     setPassword]     = useState('');
-  const [error,        setError]        = useState('');
-  const [loading,      setLoading]      = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
@@ -33,15 +34,28 @@ function Login() {
 
   return (
     <div className="auth-layout">
+      
+      {/* LE GRAND CERCLE VERT AVEC L'ILLUSTRATION */}
+      <div className="auth-image-section">
+        <div className="auth-illustration-container">
+          <img 
+            src={illustration} 
+            alt="Travel illustration" 
+            className="auth-illustration" 
+          />
+        </div>
+      </div>
+
+      {/* LE FORMULAIRE À DROITE */}
       <div className="auth-form-section">
         <div className="auth-form-container">
           <div className="auth-header">
             <h1 className="auth-title">
-              Bienvenue<span className="title-dot">.</span>
+              TravelBoard<span className="title-dot">.</span>
             </h1>
             <p className="auth-subtitle">
-              Pas encore de compte ?{' '}
-              <Link to="/register" className="auth-link">S'inscrire</Link>
+              Vous n'avez pas de compte ?{' '}
+              <Link to="/register" className="auth-link">Inscrivez-vous ici</Link>
             </p>
           </div>
 
@@ -56,7 +70,7 @@ function Login() {
 
           <form onSubmit={handleSubmit} className="auth-form">
             <div className="form-field">
-              <label htmlFor="email" className="field-label">Email</label>
+              <label htmlFor="email" className="field-label">E-mail</label>
               <div className="input-wrapper">
                 <input
                   type="email"
@@ -65,7 +79,7 @@ function Login() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   className="field-input"
-                  placeholder="votre@email.com"
+                  placeholder="entrez votre e-mail"
                   autoComplete="email"
                 />
                 <svg className="input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -84,9 +98,13 @@ function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   className="field-input"
-                  placeholder="••••••••"
+                  placeholder="entrez votre mot de passe"
                   autoComplete="current-password"
                 />
+                <svg className="input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{left: '1rem'}}>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+
                 <button
                   type="button"
                   className="password-toggle"
@@ -108,35 +126,10 @@ function Login() {
             </div>
 
             <button type="submit" className="btn-submit" disabled={loading}>
-              {loading ? 'Connexion en cours...' : 'Se connecter'}
+              {loading ? 'Connexion en cours...' : 'Connexion'}
             </button>
           </form>
         </div>
-      </div>
-
-      <div className="auth-image-section">
-        <svg className="auth-illustration" viewBox="0 0 300 300" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="150" cy="150" r="120" stroke="#FFFFFF" strokeWidth="2" opacity="0.3" />
-          <circle cx="150" cy="150" r="100" stroke="#FFFFFF" strokeWidth="1.5" opacity="0.2" />
-          <ellipse cx="150" cy="150" rx="120" ry="40" stroke="#FFFFFF" strokeWidth="1" opacity="0.2" />
-          <ellipse cx="150" cy="150" rx="120" ry="80" stroke="#FFFFFF" strokeWidth="1" opacity="0.2" />
-          <ellipse cx="150" cy="150" rx="40" ry="120" stroke="#FFFFFF" strokeWidth="1" opacity="0.2" />
-          <ellipse cx="150" cy="150" rx="80" ry="120" stroke="#FFFFFF" strokeWidth="1" opacity="0.2" />
-          <circle cx="150" cy="90"  r="6" fill="#FFFFFF" />
-          <circle cx="110" cy="130" r="6" fill="#FFFFFF" />
-          <circle cx="190" cy="140" r="6" fill="#FFFFFF" />
-          <circle cx="130" cy="180" r="6" fill="#FFFFFF" />
-          <circle cx="180" cy="110" r="6" fill="#FFFFFF" />
-          <path d="M 150 90 L 110 130"  stroke="#FFFFFF" strokeWidth="1.5" opacity="0.4" strokeDasharray="3 3" />
-          <path d="M 110 130 L 190 140" stroke="#FFFFFF" strokeWidth="1.5" opacity="0.4" strokeDasharray="3 3" />
-          <path d="M 190 140 L 180 110" stroke="#FFFFFF" strokeWidth="1.5" opacity="0.4" strokeDasharray="3 3" />
-          <path d="M 130 180 L 110 130" stroke="#FFFFFF" strokeWidth="1.5" opacity="0.4" strokeDasharray="3 3" />
-          <g transform="translate(150, 150)">
-            <circle cx="0" cy="0" r="25" fill="#FFFFFF" opacity="0.2" />
-            <circle cx="0" cy="0" r="15" fill="#FFFFFF" />
-            <circle cx="0" cy="0" r="8"  fill="#6DBE45" />
-          </g>
-        </svg>
       </div>
     </div>
   );
