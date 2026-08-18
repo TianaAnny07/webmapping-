@@ -511,7 +511,7 @@ function VisitorApp() {
       <header className="visitor-header">
         <div className="visitor-header__brand">
           <i className="bi bi-heart-pulse-fill"></i>
-          <span>Santé Madagascar</span>
+          <span>SanteGeo Madagascar</span>
         </div>
         <div className="visitor-header__actions">
           <button
@@ -528,13 +528,7 @@ function VisitorApp() {
           >
             <i className={`bi bi-pin-map ${manualLocationMode ? 'is-active' : ''}`}></i>
           </button>
-          <button
-            className="visitor-header__icon-btn"
-            onClick={() => requestLocation()}
-            title="Me localiser automatiquement"
-          >
-            <i className={`bi bi-crosshair ${watching ? 'is-active' : ''}`}></i>
-          </button>
+         
           {user && (
             <div className="visitor-header__profile-wrap">
               <button
@@ -587,6 +581,8 @@ function VisitorApp() {
             measureRoute={measure.route}
             onMapClick={handleMapClickForLocation}
             manualLocationMode={manualLocationMode}
+            onRequestLocation={() => requestLocation()}
+            
           />
 
           {/* ===== OVERLAYS ===== */}
