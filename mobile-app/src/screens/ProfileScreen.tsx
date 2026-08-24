@@ -7,22 +7,13 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/Themecontext';
 import { useLanguage } from '../context/LanguageContext';
 import { authService } from '../services/auth';
-import * as Speech from 'expo-speech';
-/**
- * Écran "Mon profil / Paramètres".
- * - Toucher la PHOTO elle-même → l'affiche simplement en grand (aperçu).
- * - Toucher le petit bouton APPAREIL PHOTO → ouvre la galerie pour la changer.
- * Dès que l'avatar est sauvegardé, updateUser() met à jour le contexte
- * auth partagé — ce qui rafraîchit automatiquement l'icône de l'onglet
- * "Profil" dans la barre du bas (voir AppNavigator.tsx).
- */
 
 
 export default function ProfileScreen() {
   const navigation = useNavigation<any>();
   const { user, logout, updateUser } = useAuth();
   const { isDark, toggleTheme, colors } = useTheme();
- const { t } = useLanguage();
+  const { t } = useLanguage();
 
   const [username, setUsername] = useState(user?.username || '');
   const [avatar, setAvatar] = useState<string | null | undefined>(user?.avatar);
@@ -48,8 +39,8 @@ export default function ProfileScreen() {
     if (!result.canceled && result.assets[0]?.base64) {
       const newAvatar = `data:image/jpeg;base64,${result.assets[0].base64}`;
       setAvatar(newAvatar);
-      // Sauvegarde immédiate : pas besoin d'attendre "Enregistrer" pour que
-      // la photo se mette à jour partout (onglet Profil inclus).
+      // Sauvegarde immédiate : pas besoin d'attendre "Enregistrer" 
+      
       saveAvatar(newAvatar);
     }
   };
@@ -57,7 +48,7 @@ export default function ProfileScreen() {
   const saveAvatar = async (newAvatar: string) => {
     try {
       const updated = await authService.updateProfile({ avatar: newAvatar });
-      updateUser(updated); // ← propage immédiatement à l'icône de l'onglet "Profil"
+      updateUser(updated); //  propage immédiatement à l'icône de l'onglet "Profil"
     } catch (e: any) {
       setError(e.response?.data?.message || "Impossible d'enregistrer la photo.");
     }
@@ -70,7 +61,7 @@ export default function ProfileScreen() {
   const handleSave = async () => {
     setError('');
     if (password && password !== confirmPassword) {
-      setError('Les mots de passe ne correspondent pas.');
+      setError(t('profile_error_mismatch'));
       return;
     }
     setSaving(true);
@@ -82,18 +73,18 @@ export default function ProfileScreen() {
       updateUser(updated);
       setPassword('');
       setConfirmPassword('');
-      Alert.alert('Profil mis à jour', 'Vos informations ont bien été enregistrées.');
+      Alert.alert(t('profile_success_title'), t('profile_success_message'));
     } catch (e: any) {
-      setError(e.response?.data?.message || 'Mise à jour impossible.');
+      setError(e.response?.data?.message || t('profile_error_failed'));
     } finally {
       setSaving(false);
     }
   };
 
   const handleLogout = () => {
-    Alert.alert('Déconnexion', 'Voulez-vous vraiment vous déconnecter ?', [
-      { text: 'Annuler', style: 'cancel' },
-      { text: 'Se déconnecter', style: 'destructive', onPress: () => logout() },
+    Alert.alert(t('profile_logout'), t('profile_logout_confirm'), [
+      { text: t('cancel'), style: 'cancel' },
+      { text: t('profile_logout'), style: 'destructive', onPress: () => logout() },
     ]);
   };
 
@@ -103,13 +94,13 @@ export default function ProfileScreen() {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Mon profil</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{t('profile_title')}</Text>
         <View style={{ width: 22 }} />
       </View>
 
       <View style={styles.avatarSection}>
         <View style={styles.avatarWrap}>
-          {/* Toucher la photo = juste l'afficher en grand */}
+          {/* Toucher la photo  juste l'afficher en grand */}
           <TouchableOpacity onPress={handleAvatarPress} activeOpacity={avatar ? 0.85 : 1} style={[styles.avatar, { backgroundColor: colors.input }]}>
             {avatar ? (
               <Image source={{ uri: avatar }} style={styles.avatarImg} />
@@ -118,7 +109,7 @@ export default function ProfileScreen() {
             )}
           </TouchableOpacity>
 
-          {/* Toucher le petit appareil photo = changer la photo */}
+          {/* Toucher le petit appareil photo changer la photo */}
           <TouchableOpacity
             onPress={pickAvatar}
             style={[styles.avatarEdit, { backgroundColor: colors.accent }]}
@@ -153,12 +144,12 @@ export default function ProfileScreen() {
         </View>
       )}
 
-      <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Nom d'utilisateur</Text>
+      <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{t('profile_username')}</Text>
       <TextInput
         style={[styles.input, { backgroundColor: colors.card, color: colors.textPrimary, borderColor: colors.border }]}
         value={username}
         onChangeText={setUsername}
-        placeholder="Votre nom"
+        placeholder={t('profile_placeholder_username')}
         placeholderTextColor={colors.textSecondary}
       />
 
@@ -172,8 +163,6 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      
-
       <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginTop: 20 }]}>
         <Ionicons name="lock-closed" size={12} /> Changer le mot de passe
       </Text>
@@ -181,7 +170,7 @@ export default function ProfileScreen() {
         style={[styles.input, { backgroundColor: colors.card, color: colors.textPrimary, borderColor: colors.border }]}
         value={password}
         onChangeText={setPassword}
-        placeholder="Laisser vide pour ne pas changer"
+        placeholder={t('profile_password_placeholder')}
         placeholderTextColor={colors.textSecondary}
         secureTextEntry
       />
@@ -189,7 +178,7 @@ export default function ProfileScreen() {
         style={[styles.input, { backgroundColor: colors.card, color: colors.textPrimary, borderColor: colors.border }]}
         value={confirmPassword}
         onChangeText={setConfirmPassword}
-        placeholder="Répéter le mot de passe"
+        placeholder={t('profile_password_confirm')}
         placeholderTextColor={colors.textSecondary}
         secureTextEntry
       />
@@ -237,7 +226,6 @@ const styles = StyleSheet.create({
   themeTitle: { fontSize: 13.5, fontWeight: '600' },
   themeSub: { fontSize: 12, marginTop: 2 },
   themeSwitch: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  
   saveBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     borderRadius: 14, paddingVertical: 14, marginTop: 22,

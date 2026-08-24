@@ -20,7 +20,7 @@ npx expo start
 
 Scanner le QR code avec l'app **Expo Go** (Android/iOS), ou lancer un émulateur.
 
-⚠️ **Important** : dans `src/services/api.ts`, remplacez `http://localhost:3000` par
+ Dans `src/services/api.ts`, remplacez `http://localhost:3000` par
 l'adresse IP locale de votre machine (ex: `http://192.168.1.10:3000/api/v1`) si vous testez
 sur un téléphone physique — `localhost` sur le téléphone ne pointera pas vers votre ordinateur.
 

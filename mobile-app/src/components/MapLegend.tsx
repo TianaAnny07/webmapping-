@@ -4,11 +4,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/Themecontext';
 import { CATEGORY_META, CATEGORY_ORDER } from '../services/facilityCategories';
 
-/**
- * Légende — générée depuis constants/facilityCategories.ts, la MÊME
- * source que les marqueurs sur la carte (CategoryMarker, FloatingMarker).
- * Impossible qu'elle se désynchronise de ce qui est affiché sur la carte.
- */
+
+
+//   source que les marqueurs sur la carte (CategoryMarker, FloatingMarker).
+ 
+ 
 export default function MapLegend() {
   const { colors } = useTheme();
   const [open, setOpen] = useState(false);

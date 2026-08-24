@@ -4,13 +4,13 @@ import { Facility, FacilityType, Itinerary, TravelMode } from '../types';
 import { haversineKm } from '../services/Geo';
 import { classifyFacilityCategory } from '../services/facilityCategories';
 
-// - Téléphone physique + Wi-Fi : http://<IP_LOCALE_DE_VOTRE_PC>:5000  (ex: http://192.168.1.10:5000)
+
 export const API_BASE_URL = 'http://192.168.1.217:5000';
-export const WS_BASE_URL = API_BASE_URL; // conservé pour référence, non utilisé actuellement
+export const WS_BASE_URL = API_BASE_URL; 
 
 export const api = axios.create({ baseURL: API_BASE_URL, timeout: 15000 });
 
-// Attache le token JWT à chaque requête, comme le fait frontend/src/services/api.js.
+
 api.interceptors.request.use(async (config) => {
   const token = await AsyncStorage.getItem('token');
   if (token) {
@@ -20,10 +20,6 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// ---------------------------------------------------------------------------
-// Établissements (le backend n'expose que GET /facilities/geojson — le reste
-// -- recherche, "à proximité", tri -- se fait ici, côté client, comme sur le web).
-// ---------------------------------------------------------------------------
 
 interface BackendFacilityProperties {
   id: number;
@@ -55,14 +51,26 @@ interface BackendFeatureCollection {
   features: BackendFeature[];
 }
 
+export interface RegionCount {
+  region: string;
+  count: number;
+  latitude: number;
+  longitude: number;
+}
+
 let facilitiesCache: Facility[] | null = null;
 let facilitiesCacheAt = 0;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 function classifyType(props: BackendFacilityProperties): FacilityType {
-  if (props.amenity === 'pharmacy') return 'pharmacy';
-  if (props.amenity === 'hospital' || props.healthcare === 'hospital') return 'hospital';
-  return 'csb';
+  const a = props.amenity;
+  const h = props.healthcare;
+  if (a === 'hospital' || h === 'hospital') return 'hospital';
+  if (a === 'pharmacy' || h === 'pharmacy') return 'pharmacy';
+  if (a === 'clinic' || h === 'clinic') return 'clinic';
+  if (a === 'health_post' || h === 'community_health_worker' || h === 'nurse') return 'health_post';
+  if (a === 'doctors' || h === 'doctor') return 'csb'; // cabinets de médecin → assimilés CSB
+  return 'other';
 }
 
 function buildHours(props: BackendFacilityProperties): string | undefined {
@@ -122,11 +130,29 @@ export function invalidateFacilitiesCache() {
   facilitiesCache = null;
 }
 
+
 export async function searchFacilities(query: string): Promise<Facility[]> {
   const all = await fetchAllFacilities();
   const q = query.trim().toLowerCase();
   if (!q) return all;
   return all.filter((f) => f.name.toLowerCase().includes(q));
+}
+
+
+ 
+export async function getFacilityCountByRegion(): Promise<{ region: string; count: number }[]> {
+  const all = await fetchAllFacilities();
+  const map = new Map<string, number>();
+  for (const f of all) {
+    const key = f.region || 'Inconnue';
+    map.set(key, (map.get(key) || 0) + 1);
+  }
+  return Array.from(map.entries())
+    .map(([region, count]) => ({ region, count }))
+    .sort((a, b) => b.count - a.count);
+}
+export async function getCachedFacilities(): Promise<Facility[]> {
+  return fetchAllFacilities();
 }
 
 export async function getFacility(id: string): Promise<Facility | undefined> {
@@ -147,23 +173,47 @@ export async function getNearbyFacilities(
   limit = 15,
 ): Promise<Facility[]> {
   const all = await fetchAllFacilities();
-  return all
-    .map((f) => ({ ...f, distanceKm: Math.round(haversineKm(lat, lon, f.latitude, f.longitude) * 10) / 10 }))
-    .filter((f) => f.distanceKm <= radiusKm)
-    .sort((a, b) => a.distanceKm - b.distanceKm)
-    .slice(0, limit);
+
+  // 1) Tous les établissements triés du plus proche au plus lointain.
+  const withDist = all
+    .map((f) => ({ f, distKm: haversineKm(lat, lon, f.latitude, f.longitude) }))
+    .sort((a, b) => a.distKm - b.distKm);
+
+  // 2) Garantit au moins un hôpital, un CSB, une pharmacie et une clinique
+  //    (les plus proches de chaque famille), avant de compléter par distance.
+  const picked: Facility[] = [];
+  const pickedIds = new Set<string>();
+  const bucketOf = (c?: string): string | null => {
+    if (c === 'chu' || c === 'hospital') return 'hospital';
+    if (c === 'csb1' || c === 'csb2') return 'csb';
+    if (c === 'pharmacy') return 'pharmacy';
+    if (c === 'clinic') return 'clinic';
+    return null;
+  };
+  (['hospital', 'csb', 'pharmacy', 'clinic'] as const).forEach((bucket) => {
+    const match = withDist.find(({ f }) => bucketOf(f.category) === bucket && !pickedIds.has(f.id));
+    if (match) {
+      picked.push(match.f);
+      pickedIds.add(match.f.id);
+    }
+  });
+
+  // 3) Complète avec les plus proches restants jusqu'à `limit`.
+  for (const { f } of withDist) {
+    if (picked.length >= limit) break;
+    if (!pickedIds.has(f.id)) {
+      picked.push(f);
+      pickedIds.add(f.id);
+    }
+  }
+
+  // 4) Ajoute la distance pour l'affichage.
+  return picked.map((f) => {
+    const d = withDist.find(({ f: ff }) => ff.id === f.id)?.distKm ?? 0;
+    return { ...f, distanceKm: Math.round(d * 10) / 10 };
+  });
 }
 
-// ---------------------------------------------------------------------------
-// Itinéraire — on utilise maintenant un VRAI profil de routage par mode
-// (piéton / vélo / voiture) via le serveur public FOSSGIS, qui héberge les
-// 3 profils OSRM séparément. C'est ce qui permet, à pied notamment, d'avoir
-// un vrai chemin piéton (raccourcis, sentiers) et pas seulement la route
-// carrossable recalculée avec une vitesse plus lente.
-// Si ce serveur est indisponible, on retombe sur le serveur public OSRM
-// standard (profil "voiture" uniquement), avec une durée estimée à partir
-// d'une vitesse moyenne par mode — comme le fait le web.
-// ---------------------------------------------------------------------------
 
 const OSRM_ENDPOINTS: Record<TravelMode, { url: string; profile: string }> = {
   walking: { url: 'https://routing.openstreetmap.de/routed-foot/route/v1', profile: 'foot' },
@@ -182,9 +232,7 @@ function mapRoute(route: any, mode: TravelMode, realDuration: boolean): Itinerar
   const geometry: [number, number][] = route.geometry.coordinates.map(
     ([lon, lat]: [number, number]) => [lat, lon],
   );
-  // Si la durée vient d'un vrai profil piéton/vélo/voiture, on la garde telle
-  // quelle (calibrée). Sinon (repli sur le profil voiture générique), on
-  // l'estime avec une vitesse moyenne par mode.
+  
   const durationSeconds = realDuration
     ? route.duration
     : (route.distance / 1000 / (MODE_SPEEDS_KMH[mode] || MODE_SPEEDS_KMH.driving)) * 3600;
@@ -237,14 +285,7 @@ export async function getItinerary(
   return mapRoute(route, mode, realDuration);
 }
 
-/**
- * Renvoie plusieurs propositions d'itinéraire (quand le serveur en trouve) :
- * la plus courte en distance, et la "recommandée" (celle que le moteur de
- * routage privilégie). Pour la marche à pied notamment, ça permet à
- * l'utilisateur de choisir un chemin plus court plutôt que le plus "roulant".
- * Note : les alternatives dépendent de la zone — si une seule route existe,
- * elle est renvoyée seule, marquée "recommended".
- */
+
 export async function getItineraryOptions(
   fromLat: number,
   fromLon: number,
@@ -262,8 +303,7 @@ export async function getItineraryOptions(
     return mapped;
   }
 
-  // La plus courte en distance devient "shortest", celle que le moteur classe
-  // en premier (généralement la plus rapide/directe) reste "recommended".
+  
   const shortestIdx = mapped.reduce(
     (best: number, r: Itinerary, i: number) => (r.distanceMeters < mapped[best].distanceMeters ? i : best),
     0,
@@ -273,7 +313,7 @@ export async function getItineraryOptions(
   });
   if (shortestIdx === 0) mapped[0].label = 'recommended';
 
-  // Dédoublonne : si deux options ont quasi la même distance/durée, n'en garde qu'une.
+ 
   const unique: Itinerary[] = [];
   for (const r of mapped) {
     const dup = unique.find((u) => Math.abs(u.distanceMeters - r.distanceMeters) < 50);

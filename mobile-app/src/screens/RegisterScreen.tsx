@@ -27,14 +27,9 @@ export default function RegisterScreen() {
     }
     setLoading(true);
     try {
-      // On appelle directement authService.register (pas le register() du
-      // contexte auth) pour NE PAS connecter automatiquement l'utilisateur.
-      // Le compte est créé côté serveur, puis on renvoie vers l'écran de
-      // connexion — comme demandé : "enregistrer d'abord, puis retour vers
-      // connecter".
+      
       await authService.register(email, password, 'visitor', username || undefined);
-      // authService.register stocke un token par défaut (comportement web) :
-      // on l'efface pour forcer un vrai passage par l'écran de connexion.
+      
       await authService.logout();
 
       Alert.alert('Compte créé', 'Votre compte a bien été créé. Connectez-vous pour continuer.', [

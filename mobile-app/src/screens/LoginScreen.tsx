@@ -24,12 +24,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await login(email.trim(), password);
-      // Si on arrive ici sans erreur, le contexte auth a bien reçu un
-      // utilisateur : AppNavigator bascule automatiquement vers les onglets.
-      // Si l'app ne s'ouvre toujours pas après un login "réussi" sans
-      // message d'erreur affiché, c'est le signe que la réponse serveur
-      // ne contient pas le champ attendu (access_token/user) — vérifier
-      // les logs du terminal Metro pour la trace exacte de l'erreur.
+      
     } catch (e: any) {
       const serverMessage = e?.response?.data?.message;
       const isNetworkError = !e?.response;

@@ -9,13 +9,12 @@ import { useTheme } from '../context/Themecontext';
 
 const INITIAL_REGION = { latitude: -18.9, longitude: 47.0, latitudeDelta: 8, longitudeDelta: 8 };
 
-/**
- * Onglet dédié "Distance" : deux façons de placer les points A et B —
- * toucher la carte, OU taper un nom (ville/établissement) dans les champs
- * du panneau avec suggestions automatiques. Rien ne s'affiche sur la carte
- * tant qu'on n'a pas appuyé sur "Valider" : à ce moment-là seulement, la
- * carte zoome sur les deux points et affiche la distance entre eux.
- */
+
+function getZoomForDelta(deltaDeg: number): number {
+  const zoom = Math.log2(360 / deltaDeg) + 0.5; // + 0.5 = un cran de zoom en plus qu'avant
+  return Math.max(3, Math.min(18, Math.round(zoom)));
+}
+
 export default function MeasureScreen() {
   const { colors } = useTheme();
   const mapRef = useRef<MapView>(null);
@@ -62,8 +61,6 @@ export default function MeasureScreen() {
     [pointA, pointB],
   );
 
-  // Utilisé à la fois par le tap sur la carte (label vide) et par la
-  // sélection dans les champs de recherche (label = nom choisi).
   const handleSetPoint = useCallback((which: 'A' | 'B', coords: LatLng | null, label: string) => {
     if (which === 'A') {
       setPointA(coords);
@@ -73,23 +70,26 @@ export default function MeasureScreen() {
       setPointBLabel(label);
     }
     setRoute(null);
-    setConfirmed(false); // il faudra re-valider après tout changement de point
+    setConfirmed(false);
   }, []);
 
   const straightLineKm = pointA && pointB
     ? haversineKm(pointA.latitude, pointA.longitude, pointB.latitude, pointB.longitude)
     : null;
 
-  // Appelé par le bouton "Valider" du panneau : révèle le trait + le
-  // badge de distance, et zoome la carte pour montrer les deux points.
+  // Zoom direct sur les 2 points au clic "Valider
   const handleConfirm = useCallback(() => {
-    if (!pointA || !pointB) return;
-    setConfirmed(true);
-    mapRef.current?.fitToCoordinates([pointA, pointB], {
-      edgePadding: { top: 160, right: 60, bottom: 260, left: 60 },
-      animated: true,
-    });
-  }, [pointA, pointB]);
+  if (!pointA || !pointB) return;
+  setConfirmed(true);
+
+  const centerLat = (pointA.latitude + pointB.latitude) / 2;
+const centerLon = (pointA.longitude + pointB.longitude) / 2;
+const latDelta = Math.abs(pointA.latitude - pointB.latitude) * 1.2 || 0.015;   // 1.6 → 1.2
+const lonDelta = Math.abs(pointA.longitude - pointB.longitude) * 1.2 || 0.015; // 1.6 → 1.2
+const zoom = getZoomForDelta(Math.max(latDelta, lonDelta));
+
+mapRef.current?.setCamera({ center: { latitude: centerLat, longitude: centerLon }, zoom });
+}, [pointA, pointB]);
 
   const handleComputeRoute = useCallback(
     async (mode: TravelMode) => {
@@ -123,7 +123,13 @@ export default function MeasureScreen() {
       >
         {pointA && pointB && confirmed && (
           <>
-            <Polyline coordinates={[pointA, pointB]} strokeColor="#f59e0b" strokeWidth={3} lineDashPattern={[6, 6]} />
+            <Polyline
+  coordinates={[pointA, pointB]}
+  strokeColor="#f59e0b"
+  strokeWidth={4}
+  lineDashPattern={[1, 12]}
+  lineCap="round"
+/>
             {midpoint && straightLineKm != null && (
               <Marker coordinate={midpoint} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
                 <View style={[styles.distanceBadge, { borderColor: '#f59e0b' }]}>
@@ -153,6 +159,9 @@ export default function MeasureScreen() {
           onComputeRoute={handleComputeRoute}
           onReset={reset}
           onClose={reset}
+           
+  nearA={pointB}   // Point A cherché près du Point B déjà placé
+  nearB={pointA}
         />
       </View>
     </View>

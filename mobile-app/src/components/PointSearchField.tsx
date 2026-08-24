@@ -12,22 +12,18 @@ interface Props {
   value: string; // nom actuellement sélectionné (label du point)
   onSelect: (coords: { latitude: number; longitude: number }, label: string) => void;
   onClear: () => void;
+  near?: { latitude: number; longitude: number } | null; 
 }
 
-// Un résultat de suggestion peut être soit un établissement de santé,
-// soit une ville/village trouvé via géocodage (Nominatim/OpenStreetMap).
+// Un résultat de suggestion 
+
 type Suggestion =
   | { kind: 'facility'; id: string; name: string; sub: string; latitude: number; longitude: number }
   | { kind: 'place'; id: string; name: string; sub: string; latitude: number; longitude: number };
 
-/**
- * Champ "Point A" / "Point B" avec suggestions automatiques. Combine deux
- * sources de résultats pendant la frappe :
- * - les établissements de santé déjà chargés dans l'app (hôpitaux/CSB)
- * - les villes/villages trouvés via géocodage (pour pouvoir taper le nom
- *   d'une ville qui n'a pas forcément de CSB portant ce nom exact)
- */
-export default function PointSearchField({ label, placeholder, value, onSelect, onClear }: Props) {
+
+ 
+export default function PointSearchField({ label, placeholder, value, onSelect, onClear, near }: Props) {
   const { colors } = useTheme();
   const [query, setQuery] = useState(value);
   const [results, setResults] = useState<Suggestion[]>([]);
@@ -46,7 +42,7 @@ export default function PointSearchField({ label, placeholder, value, onSelect, 
       try {
         const [facilities, places] = await Promise.all([
           searchFacilities(query).catch(() => [] as Facility[]),
-          searchPlaces(query).catch(() => []),
+          searchPlaces(query, near ?? null).catch(() => [])
         ]);
         const facilitySuggestions: Suggestion[] = facilities.slice(0, 4).map((f) => ({
           kind: 'facility',
@@ -60,7 +56,8 @@ export default function PointSearchField({ label, placeholder, value, onSelect, 
           kind: 'place',
           id: `p-${i}-${p.name}`,
           name: p.name,
-          sub: 'Ville / lieu',
+           sub: p.context || 'Ville / lieu',
+          
           latitude: p.latitude,
           longitude: p.longitude,
         }));
@@ -71,7 +68,7 @@ export default function PointSearchField({ label, placeholder, value, onSelect, 
       }
     }, 350);
     return () => clearTimeout(t);
-  }, [query]);
+  }, [query, near]);
 
   const handlePick = (s: Suggestion) => {
     setQuery(s.name);

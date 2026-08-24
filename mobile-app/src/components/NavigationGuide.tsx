@@ -12,11 +12,7 @@ interface Props {
   destinationName?: string;
 }
 
-/**
- * Petit guide de navigation : flèche tournante + instruction textuelle
- * ("Tournez à gauche sur RN7 · dans 200 m"). Équivalent mobile de
- * frontend/src/visitor/components/NavigationGuide.jsx.
- */
+
 export default function NavigationGuide({ step, nextStep, distanceToStepMeters, destinationName }: Props) {
   const { colors } = useTheme();
   const { text, rotation } = describeStep(step);

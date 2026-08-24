@@ -2,11 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from './api';
 import { User } from '../types';
 
-/**
- * Service d'authentification mobile — même contrat que
- * frontend/src/services/api.js (authService), adapté à AsyncStorage
- * (React Native n'a pas de localStorage).
- */
+
 export const authService = {
   async register(email: string, password: string, role: string, username?: string) {
     const { data } = await api.post('/auth/register', { email, password, role, username });

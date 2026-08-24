@@ -1,5 +1,4 @@
-// Traduit une instruction de manœuvre OSRM (type + modifier) en texte,
-// en français ou en malgache selon la langue choisie dans le profil.
+
 import { RouteStep } from '../types';
 import { Language } from '../services/translations';
 
@@ -20,8 +19,7 @@ const TYPE_TEXT: Record<Language, Record<string, string>> = {
     'off ramp': 'Prenez la sortie',
     notification: 'Continuez',
   },
-  // ⚠️ Traductions malgaches non relues par un locuteur natif — à faire
-  // vérifier avant mise en production, en particulier gauche/droite.
+  
   mg: {
     depart: 'Miaingà',
     arrive: "Tonga amin'ny toerana kendrena ianao",
@@ -74,7 +72,7 @@ const MODIFIER_ROTATION: Record<string, number> = {
   'sharp left': -135,
 };
 
-/** Retourne { text, rotation } pour une étape OSRM donnée, dans la langue choisie. */
+
 export function describeStep(step?: RouteStep | null, language: Language = 'fr'): { text: string; rotation: number } {
   if (!step) return { text: '', rotation: 0 };
   const TYPE = TYPE_TEXT[language];

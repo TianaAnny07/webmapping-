@@ -9,10 +9,9 @@ interface Props {
   compact?: boolean; // version réduite, utilisée sous l'itinéraire pendant la navigation
 }
 
-/**
- * Description composée à partir des vraies données disponibles :
- * description du backend si renseignée, sinon région/district + horaires.
- */
+
+  // description du backend si renseignée, sinon région/district + horaires.
+ 
 import { CATEGORY_META } from '../services/facilityCategories';
 
 function buildDescription(f: Facility): string {

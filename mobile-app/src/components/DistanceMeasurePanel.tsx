@@ -9,6 +9,7 @@ import PointSearchField from './PointSearchField';
 interface Props {
   pointA: { latitude: number; longitude: number } | null;
   pointB: { latitude: number; longitude: number } | null;
+  
   pointALabel: string;
   pointBLabel: string;
   straightLineKm: number | null;
@@ -21,6 +22,8 @@ interface Props {
   onComputeRoute: (mode: TravelMode) => void;
   onReset: () => void;
   onClose: () => void;
+   nearB?: { latitude: number; longitude: number } | null; // pour biaiser Point B vers Point A
+  nearA?: { latitude: number; longitude: number } | null; // pour biaiser Point A vers Point B
 }
 
 const MODES: { key: TravelMode; icon: any; label: string }[] = [
@@ -29,17 +32,13 @@ const MODES: { key: TravelMode; icon: any; label: string }[] = [
   { key: 'driving', icon: 'car', label: 'Voiture' },
 ];
 
-/**
- * Panneau flottant du mode "mesurer une distance".
- * - Avant validation : champs Point A / Point B + bouton "Valider".
- * - Après validation : se réduit automatiquement en petite pastille sur
- *   le côté droit, pour dégager la vue sur la carte zoomée + la distance
- *   affichée dessus. On peut retoucher la pastille pour rouvrir le
- *   panneau complet (choix à pied / moto / voiture).
- */
+
+//  Panneau flottant du mode "mesurer une distance".
+ 
+ 
 export default function DistanceMeasurePanel({
   pointA, pointB, pointALabel, pointBLabel, straightLineKm, confirmed, route, loading, error,
-  onSetPoint, onConfirm, onComputeRoute, onReset, onClose,
+  onSetPoint, onConfirm, onComputeRoute, onReset, onClose, nearB, nearA,
 }: Props) {
   const { colors } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
@@ -97,6 +96,7 @@ export default function DistanceMeasurePanel({
             value={pointALabel}
             onSelect={(coords, label) => onSetPoint('A', coords, label)}
             onClear={() => onSetPoint('A', null, '')}
+             near={nearA}   
           />
           <PointSearchField
             label="Point B"
@@ -104,6 +104,7 @@ export default function DistanceMeasurePanel({
             value={pointBLabel}
             onSelect={(coords, label) => onSetPoint('B', coords, label)}
             onClear={() => onSetPoint('B', null, '')}
+            near={nearB} 
           />
           <Text style={[styles.status, { color: colors.textSecondary }]}>{status}</Text>
         </>

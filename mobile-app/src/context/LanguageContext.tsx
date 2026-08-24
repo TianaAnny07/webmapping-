@@ -1,5 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { createContext, useCallback, useContext, useEffect, useMemo } from 'react';
 import { translations, Language, TranslationKey } from '../services/translations';
 import { setSpeechLanguage } from '../services/Speech';
 
@@ -10,29 +9,22 @@ interface LanguageContextValue {
 }
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
-const STORAGE_KEY = 'app-language';
+
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [language, setLanguageState] = useState<Language>('fr');
+  const language: Language = 'fr';
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((v) => {
-      if (v === 'mg' || v === 'fr') {
-        setLanguageState(v);
-        setSpeechLanguage(v);
-      }
-    });
+    setSpeechLanguage('fr');
   }, []);
 
-  const setLanguage = useCallback((lang: Language) => {
-    setLanguageState(lang);
-    setSpeechLanguage(lang); // le guidage vocal suit immédiatement le changement
-    AsyncStorage.setItem(STORAGE_KEY, lang);
+  const setLanguage = useCallback((_lang: Language) => {
+    // Volontairement désactivé : l'app reste en français.
   }, []);
 
-  const t = useCallback((key: TranslationKey) => translations[language][key] || translations.fr[key] || key, [language]);
+  const t = useCallback((key: TranslationKey) => translations.fr[key] || key, []);
 
-  const value = useMemo(() => ({ language, setLanguage, t }), [language, setLanguage, t]);
+  const value = useMemo(() => ({ language, setLanguage, t }), [setLanguage, t]);
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }

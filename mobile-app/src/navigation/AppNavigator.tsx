@@ -35,9 +35,7 @@ const TAB_TITLES: Record<keyof TabParamList, string> = {
 // Ordre des onglets : Carte, Recherche, Distance, Profil.
 function Tabs() {
   const { colors } = useTheme();
-  // On lit `user` ici (pas seulement dans ProfileScreen) pour que l'icône
-  // de l'onglet se mette à jour dès que l'avatar change, où que ce soit
-  // dans l'app — updateUser() dans AuthContext déclenche ce re-render.
+  
   const { user } = useAuth();
 
   return (

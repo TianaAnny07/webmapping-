@@ -1,10 +1,4 @@
-/**
- * Source UNIQUE de vérité pour les catégories d'établissements de santé :
- * couleur, icône et libellé. Utilisé à la fois par la légende
- * (MapLegend.tsx) ET par les marqueurs affichés sur la carte
- * (CategoryMarker.tsx, FloatingMarker.tsx) — pour qu'ils ne puissent
- * jamais se désynchroniser l'un de l'autre.
- */
+
 export type FacilityCategory =
   | 'chu'
   | 'hospital'
@@ -37,13 +31,7 @@ export const CATEGORY_ORDER: FacilityCategory[] = [
   'chu', 'hospital', 'csb2', 'csb1', 'pharmacy', 'clinic', 'maternity', 'other',
 ];
 
-/**
- * Détermine la catégorie d'un établissement à partir de son nom et de ses
- * tags OSM (amenity, healthcare). Le système de santé malgache encode
- * généralement le niveau directement dans le nom ("CSB II Ambohipo",
- * "CHU Antananarivo"...), donc l'analyse du nom est la méthode la plus
- * fiable en complément des tags.
- */
+
 export function classifyFacilityCategory(props: {
   name?: string | null;
   amenity?: string | null;

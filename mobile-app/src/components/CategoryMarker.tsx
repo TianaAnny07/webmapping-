@@ -10,10 +10,8 @@ interface Props {
 }
 
 /**
- * Marqueur statique (non-animé) pour les établissements affichés "en
- * temps normal" sur la carte — couleur et icône exactes de la légende
- * (contrairement à `pinColor` de react-native-maps, qui ne supporte pas
- * les couleurs hexadécimales personnalisées de façon fiable sur Android).
+ * Marqueur statique (non-animé) pour les établissements 
+ 
  */
 export default function CategoryMarker({ coordinate, category, onPress }: Props) {
   const meta = CATEGORY_META[category];

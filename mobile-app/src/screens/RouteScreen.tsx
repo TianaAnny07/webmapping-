@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Haptics from 'expo-haptics';
@@ -16,17 +16,29 @@ import FacilityInfoCard from '../components/FacilityInfoCard';
 import FloatingMarker from '../components/FloatingMarker';
 import { useTheme } from '../context/Themecontext';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
+
+
+function getBoundingRegion(coords: { latitude: number; longitude: number }[], padding = 1.5) {
+  if (coords.length === 0) return null;
+  let minLat = coords[0].latitude, maxLat = coords[0].latitude;
+  let minLon = coords[0].longitude, maxLon = coords[0].longitude;
+  coords.forEach((c) => {
+    minLat = Math.min(minLat, c.latitude);
+    maxLat = Math.max(maxLat, c.latitude);
+    minLon = Math.min(minLon, c.longitude);
+    maxLon = Math.max(maxLon, c.longitude);
+  });
+  const latitudeDelta = Math.max((maxLat - minLat) * padding, 0.01);
+  const longitudeDelta = Math.max((maxLon - minLon) * padding, 0.01);
+  return { latitude: (minLat + maxLat) / 2, longitude: (minLon + maxLon) / 2, latitudeDelta, longitudeDelta };
+}
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Route'>;
 
-// ⚠️ Seuil de détection "hors itinéraire", en mètres. Un smartphone a
-// normalement une précision GPS de 5 à 15 m, même à l'arrêt — un seuil
-// trop bas (proche de 1 m) déclenchera l'alerte en continu à cause du
-// simple bruit du signal, pas d'un vrai écart de trajet. 15 m est déjà
-// très réactif ; ajustez cette valeur ici selon vos tests sur le terrain.
-const OFF_ROUTE_THRESHOLD_M = 15;
-// Seuil resserré : on n'annonce "arrivé" que tout près de la vraie
-// destination (avant : 60 m, ce qui déclenchait l'annonce trop tôt).
+
+const OFF_ROUTE_THRESHOLD_M = 60;
+
 const ARRIVAL_THRESHOLD_M = 20;
 const STEP_ARRIVAL_THRESHOLD_M = 30;
 
@@ -35,10 +47,13 @@ export default function RouteScreen() {
   const routeParams = useRoute<Props['route']>();
   const { facility, mode } = routeParams.params;
   const { colors } = useTheme();
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
+  const { user } = useAuth();
   const mapRef = useRef<MapView>(null);
   const watchSub = useRef<{ remove: () => void } | null>(null);
   const hasFitRoute = useRef(false);
+  const hasGreeted = useRef(false);
+  const lastCameraUpdate = useRef(0); // limite les animations caméra à 1 max par seconde
   const wasOffRoute = useRef(false); // pour ne déclencher l'alerte qu'au moment où on SORT de l'itinéraire, pas en boucle
 
   const [itinerary, setItinerary] = useState<Itinerary>(routeParams.params.itinerary);
@@ -48,32 +63,46 @@ export default function RouteScreen() {
   const [arrived, setArrived] = useState(false);
   const [voiceOn, setVoiceOn] = useState(isVoiceEnabled());
   const [recalculating, setRecalculating] = useState(false);
+  
+  const [followMode, setFollowMode] = useState(true);
 
   const steps = itinerary.steps;
   const currentStep = steps[stepIndex];
   const nextStep = steps[stepIndex + 1];
 
-  // 1) Zoom directement sur l'itinéraire dès le démarrage de la navigation,
-  //    au lieu d'une vue large centrée sur la destination.
+  
+  const initialItineraryRegion = useMemo(() => {
+    const coords = itinerary.geometry.map(([lat, lon]) => ({ latitude: lat, longitude: lon }));
+    return getBoundingRegion(coords) || {
+      latitude: facility.latitude, longitude: facility.longitude, latitudeDelta: 0.05, longitudeDelta: 0.05,
+    };
+  }, [itinerary, facility]);
+
+  
   useEffect(() => {
     if (hasFitRoute.current || itinerary.geometry.length === 0) return;
     const coords = itinerary.geometry.map(([lat, lon]) => ({ latitude: lat, longitude: lon }));
-    const t = setTimeout(() => {
-      mapRef.current?.fitToCoordinates(coords, {
-        edgePadding: { top: 140, right: 60, bottom: 260, left: 60 },
-        animated: true,
-      });
-      hasFitRoute.current = true;
-    }, 300); // léger délai pour laisser la MapView finir son montage natif
-    return () => clearTimeout(t);
+    mapRef.current?.fitToCoordinates(coords, {
+      edgePadding: { top: 140, right: 60, bottom: 260, left: 60 },
+      animated: false, // pas d'animation ici : c'est déjà quasi la bonne vue, un ajustement sec évite tout effet de "zoom qui rentre"
+    });
+    hasFitRoute.current = true;
   }, [itinerary]);
 
-  // Annonce vocale au démarrage puis à chaque changement d'étape.
+  // Annonce vocale au démarrage puis à chaque changement d'étape 
+  
   useEffect(() => {
     if (!currentStep) return;
     const { text } = describeStep(currentStep, language);
-    speak(text);
-  }, [stepIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!hasGreeted.current) {
+      hasGreeted.current = true;
+      const name = user?.username?.trim();
+      const greeting = name ? `Bonjour ${name}. ` : 'Bonjour. ';
+      speak(`${greeting}${text}`);
+    } else {
+      speak(text);
+    }
+  }, [stepIndex]); 
 
   useEffect(() => {
     return () => {
@@ -82,15 +111,24 @@ export default function RouteScreen() {
     };
   }, []);
 
-  // Suivi position en direct : avance d'étape, détecte l'arrivée et les écarts d'itinéraire.
+  
   useEffect(() => {
     watchPosition((coords) => {
       setUserPos(coords);
 
+     
+      if (followMode && hasFitRoute.current) {
+        const now = Date.now();
+        if (now - lastCameraUpdate.current > 1000) {
+          lastCameraUpdate.current = now;
+          mapRef.current?.animateCamera({ center: coords, zoom: 17 }, { duration: 500 });
+        }
+      }
+
       const distToDestKm = haversineKm(coords.latitude, coords.longitude, facility.latitude, facility.longitude);
       if (distToDestKm * 1000 <= ARRIVAL_THRESHOLD_M) {
         setArrived(true);
-        speak('Vous êtes arrivé à destination.');
+        speak(t('nav_arrived_voice'));
         watchSub.current?.remove();
         return;
       }
@@ -107,18 +145,16 @@ export default function RouteScreen() {
       const isOffNow = off > OFF_ROUTE_THRESHOLD_M;
       setOffRouteM(isOffNow ? off : null);
 
-      // 2) Alerte renforcée (vibration + voix) au moment précis où l'on
-      // sort de l'itinéraire — une seule fois, pas à chaque mise à jour
-      // GPS tant qu'on reste hors route.
+      // alerte hors itineraire
       if (isOffNow && !wasOffRoute.current) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-        speak("Attention, vous semblez être hors de l'itinéraire prévu.");
+        speak(t('nav_off_route_voice'));
       }
       wasOffRoute.current = isOffNow;
     }).then((sub) => {
       watchSub.current = sub;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [itinerary]);
 
   const handleRecalculate = useCallback(async () => {
@@ -160,17 +196,31 @@ export default function RouteScreen() {
         ref={mapRef}
         style={StyleSheet.absoluteFill}
         provider={PROVIDER_GOOGLE}
-        initialRegion={{
-          latitude: userPos?.latitude ?? facility.latitude,
-          longitude: userPos?.longitude ?? facility.longitude,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
-        }}
+        initialRegion={initialItineraryRegion}
         showsUserLocation
+        onPanDrag={() => setFollowMode(false)}
       >
         <FloatingMarker coordinate={{ latitude: facility.latitude, longitude: facility.longitude }} category={facility.category} />
-        {coords.length > 0 && <Polyline coordinates={coords} strokeColor={colors.accent} strokeWidth={5} />}
+        {coords.length > 0 && (
+          <>
+            {/* Liseré blanc en dessous : rend le tracé net et lisible sur n'importe quel fond de carte */}
+            <Polyline coordinates={coords} strokeColor="#ffffff" strokeWidth={9} lineCap="round" lineJoin="round" />
+            <Polyline coordinates={coords} strokeColor={colors.accent} strokeWidth={5} lineCap="round" lineJoin="round" />
+          </>
+        )}
       </MapView>
+
+      {!followMode && !arrived && (
+        <TouchableOpacity
+          onPress={() => {
+            setFollowMode(true);
+            if (userPos) mapRef.current?.animateCamera({ center: userPos, zoom: 17 }, { duration: 500 });
+          }}
+          style={[styles.recenterBtn, { backgroundColor: colors.accent }]}
+        >
+          <Ionicons name="locate" size={20} color="#fff" />
+        </TouchableOpacity>
+      )}
 
       <TouchableOpacity onPress={handleStop} style={[styles.backBtn, { backgroundColor: colors.card }]}>
         <Ionicons name="arrow-back" size={20} color={colors.textPrimary} />
@@ -190,10 +240,10 @@ export default function RouteScreen() {
         <View style={[styles.alertBanner, { top: currentStep ? 130 : 60 }]}>
           <Ionicons name="alert-circle" size={20} color="#fff" />
           <Text style={styles.alertText}>
-            Vous semblez être hors de l'itinéraire prévu (à {Math.round(offRouteM)} m).
+            {t('nav_off_route')} ({Math.round(offRouteM)} m).
           </Text>
           <TouchableOpacity onPress={handleRecalculate} disabled={recalculating} style={styles.alertAction}>
-            <Text style={styles.alertActionText}>{recalculating ? '…' : 'Recalculer'}</Text>
+            <Text style={styles.alertActionText}>{recalculating ? '…' : t('nav_recalculate')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -203,23 +253,23 @@ export default function RouteScreen() {
           <>
             <View style={styles.arrivedRow}>
               <Ionicons name="checkmark-circle" size={22} color={colors.accent} />
-              <Text style={[styles.destName, { color: colors.textPrimary }]}>Vous êtes arrivé</Text>
+              <Text style={[styles.destName, { color: colors.textPrimary }]}>{t('nav_arrived')}</Text>
             </View>
             <FacilityInfoCard facility={facility} compact />
             <TouchableOpacity style={[styles.stopBtn, { backgroundColor: colors.accent }]} onPress={handleStop}>
-              <Text style={styles.stopBtnText}>Terminer</Text>
+              <Text style={styles.stopBtnText}>{t('nav_finish')}</Text>
             </TouchableOpacity>
           </>
         ) : (
           <>
             <Text style={[styles.destName, { color: colors.textPrimary }]}>{facility.name}</Text>
             <Text style={[styles.routeInfo, { color: colors.textSecondary }]}>
-              {formatDistance(itinerary.distanceMeters)} · {formatDuration(itinerary.durationSeconds)} · {MODE_SPEEDS_KMH[mode]} km/h
+              {formatDistance(itinerary.distanceMeters)} · {formatDuration(itinerary.durationSeconds)} · {MODE_SPEEDS_KMH[mode]} {t('km_h')}
             </Text>
             <FacilityInfoCard facility={facility} compact />
             <TouchableOpacity style={[styles.stopBtn, { backgroundColor: colors.danger }]} onPress={handleStop}>
               <Ionicons name="stop-circle" size={18} color="#fff" />
-              <Text style={styles.stopBtnText}>Arrêter la navigation</Text>
+              <Text style={styles.stopBtnText}>{t('nav_stop')}</Text>
             </TouchableOpacity>
           </>
         )}
@@ -231,6 +281,7 @@ export default function RouteScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   backBtn: { position: 'absolute', top: 55, left: 16, padding: 10, borderRadius: 24, elevation: 3 },
+  recenterBtn: { position: 'absolute', bottom: 190, right: 16, padding: 12, borderRadius: 26, elevation: 5, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 4 },
   voiceBtn: { position: 'absolute', top: 55, right: 16, padding: 10, borderRadius: 24, elevation: 3 },
   guideWrap: { position: 'absolute', top: 110, left: 16, right: 16 },
   alertBanner: {

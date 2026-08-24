@@ -1,7 +1,15 @@
 import type { FacilityCategory } from '../services/facilityCategories';
 export type { FacilityCategory };
 
-export type FacilityType = 'hospital' | 'csb' | 'pharmacy';
+export type FacilityType =
+  | 'hospital'
+  | 'csb'
+  | 'pharmacy'
+  | 'clinic'
+  | 'health_post'
+  | 'other';
+
+
 export type Accessibility = 'high' | 'medium' | 'low';
 export type FacilityStatus = 'operational' | 'limited' | 'closed';
 export type TravelMode = 'walking' | 'cycling' | 'driving';
@@ -10,7 +18,8 @@ export interface Facility {
   id: string;
   name: string;
   type: FacilityType;
-  category: FacilityCategory; // catégorie détaillée : chu, hospital, csb2, csb1, pharmacy, clinic, maternity, other
+  category: FacilityCategory; // catégorie détaillée : chu, hospital, csb2, csb1, pharmacy, clinic,...
+  
   level?: string;
   latitude: number;
   longitude: number;
@@ -45,7 +54,7 @@ export interface Itinerary {
   durationSeconds: number;
   geometry: [number, number][]; // [lat, lon][]
   steps: RouteStep[];
-  label?: string; // 'recommended' | 'shortest' | 'alt-N', pour les options multiples
+  label?: string; 
 }
 
 export interface User {
@@ -56,7 +65,7 @@ export interface User {
   avatar?: string | null;
 }
 
-// Onglets du bas : Carte, Recherche, Distance, Profil.
+
 export type TabParamList = {
   Map: undefined;
   Search: undefined;
@@ -64,7 +73,7 @@ export type TabParamList = {
   Profile: undefined;
 };
 
-// Écrans accessibles depuis la pile de navigation principale (une fois connecté).
+
 export type RootStackParamList = {
   Tabs: undefined;
   FacilityDetail: { facility: Facility };
@@ -72,7 +81,7 @@ export type RootStackParamList = {
   Profile: undefined;
 };
 
-// Écrans de la pile d'authentification (avant connexion).
+
 export type AuthStackParamList = {
   Login: { prefillEmail?: string } | undefined;
   Register: undefined;

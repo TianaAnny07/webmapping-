@@ -1,7 +1,4 @@
-// Utilitaires géographiques — portage exact de frontend/src/visitor/utils/geo.js
-// afin que les calculs de distance/itinéraire soient identiques entre web et mobile.
 
-/** Distance en km entre deux points (formule de Haversine). */
 export function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -12,11 +9,7 @@ export function haversineKm(lat1: number, lon1: number, lat2: number, lon2: numb
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-/**
- * Distance approximative (en mètres) entre un point et un itinéraire
- * (liste de [lat, lon]). Distance minimale vers chaque sommet de la
- * polyligne — suffisant pour détecter un écart important.
- */
+
 export function distanceToRouteMeters(lat: number, lon: number, routeCoords: [number, number][]): number {
   if (!routeCoords || routeCoords.length === 0) return Infinity;
   let min = Infinity;
@@ -27,7 +20,7 @@ export function distanceToRouteMeters(lat: number, lon: number, routeCoords: [nu
   return min;
 }
 
-/** Cap initial (en degrés, 0 = Nord, sens horaire) du point 1 vers le point 2. */
+
 export function bearingDeg(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const toRad = (d: number) => (d * Math.PI) / 180;
   const toDeg = (r: number) => (r * 180) / Math.PI;
@@ -38,7 +31,7 @@ export function bearingDeg(lat1: number, lon1: number, lat2: number, lon2: numbe
   return (toDeg(Math.atan2(y, x)) + 360) % 360;
 }
 
-/** Index du point de la polyligne le plus proche d'une position donnée. */
+
 export function nearestRouteIndex(lat: number, lon: number, routeCoords: [number, number][]): number {
   if (!routeCoords || routeCoords.length === 0) return -1;
   let bestIdx = 0;
@@ -53,14 +46,14 @@ export function nearestRouteIndex(lat: number, lon: number, routeCoords: [number
   return bestIdx;
 }
 
-/** Formate une distance en mètres en texte lisible (m ou km). */
+
 export function formatDistance(meters?: number | null): string {
   if (meters == null || Number.isNaN(meters)) return '—';
   if (meters < 1000) return `${Math.round(meters)} m`;
   return `${(meters / 1000).toFixed(1)} km`;
 }
 
-/** Formate une durée en secondes en texte lisible (min ou h min). */
+//  Formate une durée en secondes en texte lisible (min ou h min). 
 export function formatDuration(seconds?: number | null): string {
   if (seconds == null || Number.isNaN(seconds)) return '—';
   const totalMin = Math.round(seconds / 60);

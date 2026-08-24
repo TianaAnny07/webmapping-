@@ -8,11 +8,9 @@ interface Props {
   onPress?: () => void;
 }
 
-/**
- * Petite icône hôpital/CSB statique (pas d'animation) — utilisée pour
- * l'établissement trouvé via la recherche, pour le distinguer des
- * marqueurs "flottants" (ceux à proximité de l'utilisateur).
- */
+
+  // Petite icône hôpital/CSB statique (pas d'animation)
+ 
 export default function FacilityIconMarker({ coordinate, type, onPress }: Props) {
   const color = type === 'hospital' ? '#00c9a7' : '#f59e0b';
 
