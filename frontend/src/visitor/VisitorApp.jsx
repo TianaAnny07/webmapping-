@@ -19,14 +19,15 @@ import DistancePanel from './components/DistancePanel';
 import LogoutConfirm from '../components/LogoutConfirm';
 import NavigationOverlay from './components/NavigationOverlay';
 import VoiceGuide from './components/VoiceGuide';
+import NearbySuggestions from './components/NearbySuggestions';
 import Toast from './components/Toast';
 import { useFacilitiesCache } from './hooks/useFacilitiesCache';
 import './VisitorApp.css';
 
 const OFF_ROUTE_THRESHOLD_M = 300;
 const ARRIVAL_THRESHOLD_M = 60;
-const STEP_ADVANCE_THRESHOLD_M = 40; // distance au point de manœuvre suivant pour considérer l'étape franchie
-const GPS_NOISE_FLOOR_M = 8; // seuil plancher, utilisé si le navigateur ne fournit pas de précision
+const STEP_ADVANCE_THRESHOLD_M = 40;
+const GPS_NOISE_FLOOR_M = 8;
 
 function buildInstructionState(step) {
   if (!step) return { instruction: 'Continuer tout droit', distance: '' };
@@ -63,50 +64,46 @@ function VisitorApp() {
   const [alert, setAlert] = useState(null);
   const [showLocationConfirm, setShowLocationConfirm] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showNearbySuggestions, setShowNearbySuggestions] = useState(false);
+  const hasSuggestedRef = useRef(false);
   const pendingLocateCallbackRef = useRef(null);
 
-  // État pour le guidage vocal
   const [voiceGuideRoute, setVoiceGuideRoute] = useState(null);
   const [offRouteMeters, setOffRouteMeters] = useState(0);
   const voiceGuideRef = useRef(null);
 
   const { position, accuracy, heading, error: geoError, watching, locateOnce, startWatch, stopWatch, setPosition } = useGeolocation();
 
-  // États pour le toast
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastVariant, setToastVariant] = useState('success');
 
-  // Mesure de distance entre deux points cliqués sur la carte
   const measure = useDistanceMeasure();
 
-  // Calcul du pourcentage de progression
   const [progressPercent, setProgressPercent] = useState(0);
   const [distanceRemaining, setDistanceRemaining] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(0);
 
-  // Suivi de l'étape actuelle pour l'instruction (basé sur la position GPS réelle)
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [currentInstruction, setCurrentInstruction] = useState({ instruction: 'Continuer tout droit', distance: '' });
   const currentStepIndexRef = useRef(0);
 
-  // Dernière position "stable" utilisée pour filtrer le bruit GPS naturel
   const lastStablePositionRef = useRef(null);
 
-  // ===== CHARGEMENT DES ÉTABLISSEMENTS AVEC CACHE =====
-  useEffect(() => {
-    // Si le cache est encore en train de charger, on attend
-    if (cacheLoading) return;
+  // Simulation
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [simulationInterval, setSimulationInterval] = useState(null);
+  const [simulationProgress, setSimulationProgress] = useState(0);
 
-    // Si on a des données en cache, on les affiche immédiatement
+  // ===== CHARGEMENT DES ÉTABLISSEMENTS =====
+  useEffect(() => {
+    if (cacheLoading) return;
     if (cachedData?.features?.length > 0) {
       setFacilities(cachedData.features);
       setUsingCache(true);
       setLoadingFacilities(false);
       setLoadError(null);
     }
-
-    // Tentative de chargement depuis le serveur (mise à jour en arrière-plan)
     api
       .get('/facilities/geojson')
       .then((res) => {
@@ -114,22 +111,17 @@ function VisitorApp() {
         setFacilities(features);
         setUsingCache(false);
         setLoadError(null);
-        // Sauvegarder dans le cache pour la prochaine fois
         saveToCache(features);
       })
       .catch(() => {
-        // Si pas de cache et pas de réseau, on affiche une erreur
         if (!cachedData?.features?.length) {
-          setLoadError("Impossible de charger les établissements. Vérifiez votre connexion. Certaines données peuvent être disponibles hors-ligne.");
+          setLoadError("Impossible de charger les établissements. Vérifiez votre connexion.");
         }
       })
       .finally(() => setLoadingFacilities(false));
   }, [cachedData, saveToCache, cacheLoading]);
 
-  // ===== MISE À JOUR DE LA PROGRESSION ET DE L'ÉTAPE ACTUELLE =====
-  // L'étape courante avance uniquement quand la position réelle se rapproche du
-  // point de manœuvre suivant. C'est cette valeur (currentStepIndex) qui pilote
-  // à la fois l'affichage (currentInstruction) ET l'annonce vocale (VoiceGuide).
+  // ===== MISE À JOUR DE LA PROGRESSION =====
   useEffect(() => {
     if (!activeRoute || !position) {
       setProgressPercent(0);
@@ -139,16 +131,12 @@ function VisitorApp() {
       return;
     }
 
-    // Filtrer le bruit GPS : si le déplacement depuis la dernière position stable
-    // est plus petit que la précision réelle du capteur (accuracy), c'est du bruit,
-    // pas un vrai déplacement. On garde un plancher minimum au cas où le navigateur
-    // ne fournit pas cette info.
     const noiseThreshold = Math.max(GPS_NOISE_FLOOR_M, (accuracy || 0) * 0.8);
     const lastStable = lastStablePositionRef.current;
     if (lastStable) {
       const movedKm = haversineKm(position[0], position[1], lastStable[0], lastStable[1]);
       if (movedKm * 1000 < noiseThreshold) {
-        return; // pas un vrai déplacement, on ne recalcule rien
+        return;
       }
     }
     lastStablePositionRef.current = position;
@@ -165,11 +153,15 @@ function VisitorApp() {
     const timeHours = distToDestKm / speed;
     setTimeRemaining(Math.round(timeHours * 60));
 
+    // Pendant la simulation, startSimulation() gère lui-même l'avancement des
+    // étapes (index calculé le long de la géométrie simulée). Ce bloc
+    // "GPS réel" ne doit pas tourner en parallèle, sinon les deux mécanismes
+    // se désynchronisent — c'était la cause du décalage voix/déplacement.
+    if (isSimulating) return;
+
     const steps = activeRoute.steps;
     if (!steps || steps.length === 0) return;
 
-    // Avancer d'autant d'étapes que nécessaire si on est déjà proche du point suivant
-    // (steps[i].location est déjà au format [lat, lon], voir osrm.js)
     let idx = currentStepIndexRef.current;
     while (idx < steps.length - 1) {
       const nextLocation = steps[idx + 1]?.location;
@@ -187,7 +179,107 @@ function VisitorApp() {
       setCurrentStepIndex(idx);
       setCurrentInstruction(buildInstructionState(steps[idx]));
     }
-  }, [activeRoute, position, accuracy]);
+  }, [activeRoute, position, accuracy, isSimulating]);
+
+  // ===== SIMULATION =====
+  const startSimulation = useCallback(() => {
+    if (!activeRoute || !activeRoute.geometry || activeRoute.geometry.length < 2) {
+      setToastMessage('Aucun itineraire a simuler');
+      setToastVariant('warning');
+      setShowToast(true);
+      return;
+    }
+
+    if (simulationInterval) {
+      clearInterval(simulationInterval);
+      setSimulationInterval(null);
+    }
+
+    setIsSimulating(true);
+    setSimulationProgress(0);
+    // Repart de zéro pour l'indexation d'étapes propre à la simulation —
+    // évite de hériter d'un index laissé par une navigation GPS précédente.
+    currentStepIndexRef.current = 0;
+    setCurrentStepIndex(0);
+    if (activeRoute.steps?.[0]) {
+      setCurrentInstruction(buildInstructionState(activeRoute.steps[0]));
+    }
+
+    const routePoints = activeRoute.geometry;
+    const totalPoints = routePoints.length;
+
+    if (routePoints.length > 0) {
+      const startPoint = routePoints[0];
+      setPosition([startPoint[0], startPoint[1]]);
+    }
+
+    let currentIndex = 0;
+
+    const interval = setInterval(() => {
+      currentIndex += 1;
+
+      if (currentIndex >= totalPoints) {
+        clearInterval(interval);
+        setSimulationInterval(null);
+        setIsSimulating(false);
+        setSimulationProgress(100);
+
+        const endPoint = routePoints[totalPoints - 1];
+        setPosition([endPoint[0], endPoint[1]]);
+
+        setToastMessage('Vous etes arrive a destination !');
+        setToastVariant('success');
+        setShowToast(true);
+
+        setTimeout(() => {
+          handleStopNavigation();
+        }, 2000);
+        return;
+      }
+
+      const point = routePoints[currentIndex];
+      setPosition([point[0], point[1]]);
+
+      const progress = (currentIndex / totalPoints) * 100;
+      setSimulationProgress(progress);
+
+      setFlyTo({ coords: [point[0], point[1]], zoom: 16, ts: Date.now() });
+
+      // FIX: utilise buildInstructionState (mêmes noms de champs que le reste
+      // de l'app : distanceMeters + buildStepInstruction) au lieu de
+      // step.maneuver?.instruction / step.distance qui n'existent pas dans
+      // ce format de step — c'est ça qui empêchait l'instruction de
+      // s'afficher pendant la simulation.
+      if (activeRoute.steps?.length) {
+        const stepIndex = Math.floor((currentIndex / totalPoints) * (activeRoute.steps.length - 1));
+        if (stepIndex !== currentStepIndexRef.current) {
+          currentStepIndexRef.current = stepIndex;
+          setCurrentStepIndex(stepIndex);
+          setCurrentInstruction(buildInstructionState(activeRoute.steps[stepIndex]));
+        }
+      }
+
+    }, 300);
+
+    setSimulationInterval(interval);
+  }, [activeRoute, setPosition, simulationInterval]);
+
+  const stopSimulation = useCallback(() => {
+    if (simulationInterval) {
+      clearInterval(simulationInterval);
+      setSimulationInterval(null);
+    }
+    setIsSimulating(false);
+    setSimulationProgress(0);
+  }, [simulationInterval]);
+
+  useEffect(() => {
+    return () => {
+      if (simulationInterval) {
+        clearInterval(simulationInterval);
+      }
+    };
+  }, [simulationInterval]);
 
   // ===== GÉOLOCALISATION =====
   const requestLocation = useCallback((onGranted) => {
@@ -213,7 +305,7 @@ function VisitorApp() {
     pendingLocateCallbackRef.current = null;
   }, []);
 
-  // ===== RECHERCHE ET RÉSULTATS =====
+  // ===== RECHERCHE =====
   const searchResults = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return facilities;
@@ -241,10 +333,9 @@ function VisitorApp() {
 
   useEffect(() => {
     if (tab === 'nearby' && position) computeNearby();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [position, tab]);
 
-  // ===== SÉLECTION D'ÉTABLISSEMENT =====
+  // ===== SÉLECTION =====
   const handleSelectFacility = useCallback((feature) => {
     setSelectedFacility(feature);
     setRoutePreview(null);
@@ -272,12 +363,11 @@ function VisitorApp() {
         const result = await getItinerary(coords[0], coords[1], lat, lon, mode);
         setRoutePreview({ mode, ...result });
       } catch (error) {
-        // Fallback : itinéraire en ligne droite si OSRM échoue
         const [lon, lat] = selectedFacility.geometry.coordinates;
         const fallback = buildFallbackRoute(coords[0], coords[1], lat, lon, mode);
         setRoutePreview({ mode, ...fallback });
         setAlert({
-          message: "Signal indisponible — itinéraire approximatif en ligne droite.",
+          message: "Signal indisponible - itineraire approximatif en ligne droite.",
           variant: 'warning',
           isFallback: true
         });
@@ -290,13 +380,13 @@ function VisitorApp() {
 
   const handleCancelPreview = useCallback(() => setRoutePreview(null), []);
   const handleSelectRouteOption = useCallback((index) => {
-  setRoutePreview((prev) => {
-    if (!prev?.options?.[index]) return prev;
-    return { ...prev, ...prev.options[index], selectedOptionIndex: index };
-  });
-}, []);
+    setRoutePreview((prev) => {
+      if (!prev?.options?.[index]) return prev;
+      return { ...prev, ...prev.options[index], selectedOptionIndex: index };
+    });
+  }, []);
 
-  // ===== VALIDATION DE L'ITINÉRAIRE =====
+  // ===== VALIDATION =====
   const handleValidateRoute = useCallback(() => {
     if (!routePreview || !selectedFacility) return;
     const [lon, lat] = selectedFacility.geometry.coordinates;
@@ -317,13 +407,9 @@ function VisitorApp() {
     currentStepIndexRef.current = 0;
     setCurrentStepIndex(0);
     lastStablePositionRef.current = null;
-
-    // Initialiser avec la première instruction réelle
     setCurrentInstruction(buildInstructionState(routePreview.steps?.[0]));
-
     startWatch();
-
-    setToastMessage(`Navigation démarrée vers ${selectedFacility.properties.name || "l'établissement"}`);
+    setToastMessage(`Navigation demarree vers ${selectedFacility.properties.name || "l'etablissement"}`);
     setToastVariant('success');
     setShowToast(true);
   }, [routePreview, selectedFacility, startWatch]);
@@ -342,20 +428,21 @@ function VisitorApp() {
     setProgressPercent(0);
     setDistanceRemaining(0);
     setTimeRemaining(0);
-  }, [stopWatch]);
+    stopSimulation();
+  }, [stopWatch, stopSimulation]);
 
-  // ===== SURVEILLANCE DE LA POSITION (arrivée / hors-route) =====
+  // ===== SURVEILLANCE =====
   useEffect(() => {
     if (!activeRoute || !position) return;
 
     const distToDestKm = haversineKm(position[0], position[1], activeRoute.destination[0], activeRoute.destination[1]);
     if (distToDestKm * 1000 <= ARRIVAL_THRESHOLD_M) {
       voiceGuideRef.current?.announceArrival();
-      setCurrentInstruction({ instruction: '✅ Vous êtes arrivé à destination !', distance: '' });
+      setCurrentInstruction({ instruction: 'Vous etes arrive a destination !', distance: '' });
       setProgressPercent(100);
       setDistanceRemaining(0);
       setTimeRemaining(0);
-      setToastMessage('Vous êtes arrivé à destination !');
+      setToastMessage('Vous etes arrive a destination !');
       setToastVariant('success');
       setShowToast(true);
       setActiveRoute(null);
@@ -366,19 +453,16 @@ function VisitorApp() {
 
     const offRouteM = distanceToRouteMeters(position[0], position[1], activeRoute.geometry);
     setOffRouteMeters(offRouteM);
-    // Ignorer les valeurs aberrantes (> 500 km = position incohérente)
     if (offRouteM > OFF_ROUTE_THRESHOLD_M && offRouteM < 500000) {
       setAlert({
-        message: `Vous êtes hors de l'itinéraire (à ${Math.round(offRouteM)} m). Recalculez pour vous guider.`,
+        message: `Vous etes hors de l'itineraire (a ${Math.round(offRouteM)} m). Recalculez pour vous guider.`,
         variant: 'warning',
       });
     } else if (offRouteM >= 500000) {
-      // Distance aberrante : position GPS incohérente, on ignore silencieusement
       setOffRouteMeters(0);
     } else if (alert?.variant === 'warning' && alert?.message?.includes('hors')) {
       setAlert(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [position, activeRoute]);
 
   const handleRecalculate = useCallback(async () => {
@@ -401,11 +485,10 @@ function VisitorApp() {
       setCurrentInstruction(buildInstructionState(result.steps?.[0]));
       lastStablePositionRef.current = null;
       setAlert(null);
-      setToastMessage('Itinéraire recalculé avec succès');
+      setToastMessage('Itineraire recalcule avec succes');
       setToastVariant('success');
       setShowToast(true);
     } catch {
-      // Fallback en ligne droite lors du recalcul
       const fallback = buildFallbackRoute(position[0], position[1], activeRoute.destination[0], activeRoute.destination[1], activeRoute.mode);
       const updatedRoute = {
         ...activeRoute,
@@ -415,14 +498,14 @@ function VisitorApp() {
       setActiveRoute(updatedRoute);
       setVoiceGuideRoute(updatedRoute);
       setAlert({
-        message: "Signal indisponible — itinéraire approximatif en ligne droite.",
+        message: "Signal indisponible - itineraire approximatif en ligne droite.",
         variant: 'warning',
         isFallback: true
       });
     }
   }, [activeRoute, position]);
 
-  // ===== PROFIL ET DÉCONNEXION =====
+  // ===== PROFIL =====
   const handleLogout = () => {
     setShowLogoutConfirm(true);
   };
@@ -432,32 +515,31 @@ function VisitorApp() {
     navigate('/login');
   };
 
-  // ===== MESURE DE DISTANCE =====
+  // ===== MESURE =====
   const handleToggleMeasure = useCallback(() => {
     setSelectedFacility(null);
     setRoutePreview(null);
     measure.toggle();
   }, [measure]);
 
-  // ===== SÉLECTION MANUELLE DE LA POSITION =====
+  // ===== POSITION MANUELLE =====
   const handleMapClickForLocation = useCallback((coords) => {
     if (manualLocationMode) {
       setPosition(coords);
       setFlyTo({ coords, zoom: 16, ts: Date.now() });
       setManualLocationMode(false);
-      setToastMessage('Position définie manuellement');
+      setToastMessage('Position definie manuellement');
       setToastVariant('success');
       setShowToast(true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [manualLocationMode]);
 
   const toggleManualLocation = useCallback(() => {
     setManualLocationMode((v) => !v);
     setToastMessage(
       manualLocationMode
-        ? 'Mode de sélection désactivé'
-        : 'Cliquez sur la carte pour définir votre position'
+        ? 'Mode de selection desactive'
+        : 'Cliquez sur la carte pour definir votre position'
     );
     setToastVariant('info');
     setShowToast(true);
@@ -488,7 +570,6 @@ function VisitorApp() {
 
   return (
     <div className="visitor-app">
-      {/* ===== MODALES ===== */}
       {showLocationConfirm && (
         <LocationConfirm onAccept={handleAcceptLocation} onCancel={handleCancelLocation} />
       )}
@@ -497,7 +578,6 @@ function VisitorApp() {
         <LogoutConfirm onConfirm={confirmLogout} onCancel={() => setShowLogoutConfirm(false)} />
       )}
 
-      {/* ===== TOAST ===== */}
       {showToast && (
         <Toast
           message={toastMessage}
@@ -507,7 +587,6 @@ function VisitorApp() {
         />
       )}
 
-      {/* ===== HEADER ===== */}
       <header className="visitor-header">
         <div className="visitor-header__brand">
           <i className="bi bi-heart-pulse-fill"></i>
@@ -524,11 +603,10 @@ function VisitorApp() {
           <button
             className="visitor-header__icon-btn"
             onClick={toggleManualLocation}
-            title="Définir ma position manuellement"
+            title="Definir ma position manuellement"
           >
             <i className={`bi bi-pin-map ${manualLocationMode ? 'is-active' : ''}`}></i>
           </button>
-         
           {user && (
             <div className="visitor-header__profile-wrap">
               <button
@@ -560,10 +638,8 @@ function VisitorApp() {
         </div>
       </header>
 
-      {/* ===== BODY ===== */}
       <div className="visitor-body">
         <div className="visitor-map-wrap">
-          {/* ===== CARTE ===== */}
           <VisitorMap
             facilities={facilities}
             userPosition={position}
@@ -582,37 +658,32 @@ function VisitorApp() {
             onMapClick={handleMapClickForLocation}
             manualLocationMode={manualLocationMode}
             onRequestLocation={() => requestLocation()}
-            
           />
 
-          {/* ===== OVERLAYS ===== */}
           <div className="visitor-map-overlay-top">
-            {/* Alerte "perdu" */}
             {alert && alert.variant === 'warning' && (
               <AlertBanner
                 message={alert.message}
                 variant={alert.variant}
                 onDismiss={() => setAlert(null)}
                 onAction={activeRoute ? handleRecalculate : undefined}
-                actionLabel="Recalculer l'itinéraire"
+                actionLabel="Recalculer l'itineraire"
               />
             )}
             {routePreview?.options?.length > 1 && (
-    <div className="route-options-panel">
-      {routePreview.options.map((opt, i) => (
-        <button
-          key={i}
-          className={`route-option-btn ${i === (routePreview.selectedOptionIndex ?? 0) ? 'is-selected' : ''}`}
-          onClick={() => handleSelectRouteOption(i)}
-        >
-          {i === 0 ? '⚡ Raccourci' : `Itinéraire ${i + 1}`} · {(opt.distanceMeters / 1000).toFixed(1)} km
-        </button>
-      ))}
-    </div>
-  )}
+              <div className="route-options-panel">
+                {routePreview.options.map((opt, i) => (
+                  <button
+                    key={i}
+                    className={`route-option-btn ${i === (routePreview.selectedOptionIndex ?? 0) ? 'is-selected' : ''}`}
+                    onClick={() => handleSelectRouteOption(i)}
+                  >
+                    {i === 0 ? 'Raccourci' : `Itineraire ${i + 1}`} · {(opt.distanceMeters / 1000).toFixed(1)} km
+                  </button>
+                ))}
+              </div>
+            )}
 
-
-            {/* Navigation Overlay - Une seule carte avec tout regroupé */}
             {activeRoute && (
               <NavigationOverlay
                 instruction={currentInstruction.instruction}
@@ -629,7 +700,6 @@ function VisitorApp() {
               />
             )}
 
-            {/* Bouton "Suis-je sur la bonne route ?" */}
             {activeRoute && voiceGuideRoute && (
               <button
                 className="visitor-header__icon-btn voice-ask-btn"
@@ -640,7 +710,6 @@ function VisitorApp() {
               </button>
             )}
 
-            {/* VoiceGuide - composant de guidage vocal (piloté par currentStepIndex, basé sur le GPS) */}
             {activeRoute && (
               <VoiceGuide
                 ref={voiceGuideRef}
@@ -648,10 +717,10 @@ function VisitorApp() {
                 isActive={!!voiceGuideRoute}
                 currentStepIndex={currentStepIndex}
                 offRouteMeters={offRouteMeters}
+                userName={user?.username || ''}
               />
             )}
 
-            {/* Panneau de mesure de distance */}
             {measure.active && (
               <DistancePanel
                 pointA={measure.pointA}
@@ -668,18 +737,16 @@ function VisitorApp() {
             )}
           </div>
 
-          {/* ===== LÉGENDE ===== */}
           <MapLegend />
 
-          {/* ===== CHARGEMENT ===== */}
           {loadingFacilities && (
             <div className="visitor-map-loading">
-              <i className="bi bi-arrow-repeat spin"></i> Chargement des établissements…
+              <i className="bi bi-arrow-repeat spin"></i> Chargement des etablissements…
             </div>
           )}
           {usingCache && !loadError && (
             <div className="visitor-map-loading visitor-map-loading--cache">
-              <i className="bi bi-wifi-off"></i> Données hors-ligne (cache)
+              <i className="bi bi-wifi-off"></i> Donnees hors-ligne (cache)
             </div>
           )}
           {loadError && (
@@ -689,7 +756,6 @@ function VisitorApp() {
           )}
         </div>
 
-        {/* ===== PANEL LATÉRAL / BOTTOM SHEET ===== */}
         <div className={`visitor-panel ${sheetExpanded ? 'is-expanded' : ''}`}>
           <button
             className="visitor-panel__handle"
@@ -713,6 +779,10 @@ function VisitorApp() {
               progressPercent={progressPercent}
               distanceRemaining={distanceRemaining}
               timeRemaining={timeRemaining}
+              onStartSimulation={startSimulation}
+              isSimulating={isSimulating}
+              simulationProgress={simulationProgress}
+              onStopSimulation={stopSimulation}
             />
           ) : (
             <ExplorePanel

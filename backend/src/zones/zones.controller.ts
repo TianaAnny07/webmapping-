@@ -12,5 +12,9 @@ export class ZonesController {
   getClassement(@Query('region') region?: string, @Query('statut') statut?: string) {
     return this.zonesService.getClassement({ region, statut });
   }
-}
 
+  @Get('classement/regions/geojson')
+  getRegionGeoJson() {
+    return this.zonesService.getRegionGeoJson();
+  }
+}

@@ -1,4 +1,4 @@
-/* CarteDashboard.css - Version sans overlay */
+/* CarteDashboard.css - Version sans overlay, thème clair/sombre */
 
 .carte-dashboard {
   position: relative;
@@ -169,7 +169,7 @@
   right: 0;
   width: 420px;
   height: 100vh;
-  background: #ffffff;
+  background: var(--bg-primary, #ffffff);
   box-shadow: -4px 0 30px rgba(0, 0, 0, 0.15);
   z-index: 2000;
   transform: translateX(100%);
@@ -177,19 +177,26 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  border-left: 4px solid transparent;
 }
 
-/* ✅ Quand le panneau est ouvert, la carte reste visible */
+/* Quand le panneau est ouvert, la carte reste visible */
 .carte-right-panel.open {
   transform: translateX(0);
 }
 
-/* ✅ PAS D'OVERLAY - Donc pas de fond sombre qui floute la carte */
+/* Bordure gauche colorée selon le statut de la région affichée */
+.carte-right-panel.statut-critique { border-left-color: #e74c3c; }
+.carte-right-panel.statut-prioritaire { border-left-color: #f39c12; }
+.carte-right-panel.statut-couvert { border-left-color: #6DBE45; }
+
+/* PAS D'OVERLAY - Donc pas de fond sombre qui floute la carte */
 
 .carte-panel-header {
   padding: 24px 28px;
-  background: linear-gradient(135deg, #1a1d23 0%, #2d3436 100%);
-  color: #fff;
+  background: var(--bg-primary, #ffffff);
+  border-bottom: 1px solid var(--border-color, #e9ecef);
+  color: var(--text-primary, #1a1d23);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -203,6 +210,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  color: var(--text-primary, #1a1d23);
 }
 
 .carte-panel-header h2::before {
@@ -218,8 +226,8 @@
   width: 36px;
   height: 36px;
   border: none;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--bg-secondary, #f1f3f5);
+  color: var(--text-primary, #1a1d23);
   border-radius: 8px;
   cursor: pointer;
   display: flex;
@@ -230,7 +238,7 @@
 }
 
 .carte-panel-close:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--border-color, #dee2e6);
   transform: rotate(90deg);
 }
 
@@ -245,21 +253,33 @@
 }
 
 .carte-panel-content::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--bg-secondary, #f1f1f1);
 }
 
 .carte-panel-content::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: var(--border-color, #c1c1c1);
   border-radius: 3px;
 }
 
 .carte-region-title {
   font-size: 22px;
   font-weight: 700;
-  color: #1a1d23;
+  color: var(--text-primary, #1a1d23);
   margin: 0 0 20px 0;
   padding-bottom: 16px;
-  border-bottom: 2px solid #f0f0f0;
+  border-bottom: 2px solid var(--border-color, #f0f0f0);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.carte-region-title i {
+  font-size: 22px;
+}
+
+.carte-region-title .alert-critique-icon {
+  color: #e74c3c;
+  font-size: 20px;
 }
 
 .carte-panel-stats-grid {
@@ -270,32 +290,40 @@
 }
 
 .carte-panel-stat {
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  background: var(--bg-secondary, #f8f9fa);
   padding: 16px;
   border-radius: 10px;
   text-align: center;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--border-color, #dee2e6);
 }
 
 .carte-panel-stat-value {
   font-size: 24px;
   font-weight: 700;
-  color: #1a1d23;
+  color: var(--text-primary, #1a1d23);
   margin-bottom: 4px;
 }
 
 .carte-panel-stat-label {
   font-size: 11px;
-  color: #6c757d;
+  color: var(--text-secondary, #6c757d);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: center;
+}
+
+.carte-panel-stat-label i {
+  font-size: 14px;
 }
 
 .carte-panel-section {
   margin-bottom: 24px;
   padding-bottom: 24px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-color, #f0f0f0);
 }
 
 .carte-panel-section:last-child {
@@ -307,10 +335,18 @@
 .carte-panel-section-title {
   font-size: 13px;
   font-weight: 600;
-  color: #495057;
+  color: var(--text-secondary, #495057);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin: 0 0 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.carte-panel-section-title i {
+  font-size: 14px;
+  color: #6DBE45;
 }
 
 .carte-panel-list {
@@ -324,29 +360,34 @@
   justify-content: space-between;
   align-items: center;
   padding: 10px 14px;
-  background: #f8f9fa;
+  background: var(--bg-secondary, #f8f9fa);
   border-radius: 8px;
-  border: 1px solid #e9ecef;
+  border: 1px solid var(--border-color, #e9ecef);
   transition: all 0.2s;
 }
 
 .carte-panel-list-item:hover {
-  background: #f0faf0;
+  background: rgba(109, 190, 69, 0.08);
   border-color: #6DBE45;
 }
 
 .carte-panel-list-label {
   font-size: 14px;
-  color: #495057;
+  color: var(--text-secondary, #495057);
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
+.carte-panel-list-label i {
+  font-size: 14px;
+  color: var(--text-secondary, #6c757d);
+}
+
 .carte-panel-list-value {
   font-size: 16px;
   font-weight: 600;
-  color: #1a1d23;
+  color: var(--text-primary, #1a1d23);
 }
 
 .dot {
@@ -414,55 +455,13 @@
     font-size: 16px;
   }
 }
-.carte-panel-header h2 {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
 
 .carte-panel-header h2 i {
   font-size: 20px;
   color: #6DBE45;
 }
 
-.carte-panel-stat-label {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.carte-panel-stat-label i {
-  font-size: 14px;
-}
-
-.carte-panel-section-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.carte-panel-section-title i {
-  font-size: 14px;
-  color: #6DBE45;
-}
-
-.carte-panel-list-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.carte-panel-list-label i {
-  font-size: 14px;
-  color: #6c757d;
-}
-
-.carte-region-title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.carte-region-title i {
-  font-size: 22px;
+/* Retire le rectangle de focus par défaut du navigateur sur les polygones cliquables */
+.leaflet-interactive:focus {
+  outline: none;
 }

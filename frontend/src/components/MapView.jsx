@@ -1,7 +1,5 @@
-
-
 import { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, GeoJSON, useMap, useMapEvents } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import 'react-leaflet-cluster/dist/assets/MarkerCluster.css';
 import 'react-leaflet-cluster/dist/assets/MarkerCluster.Default.css';
@@ -11,6 +9,7 @@ import 'leaflet/dist/leaflet.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import Routing from './Routing';
 import config from '../config';
+import api from '../services/api';
 import { getTypeLabel, getCustomIcon, isOpenNow } from '../utils/facilityDisplay';
 
 delete L.Icon.Default.prototype._getIconUrl;
@@ -20,6 +19,15 @@ L.Icon.Default.mergeOptions({
   shadowUrl: require('leaflet/dist/images/marker-shadow.png'),
 });
 
+// ===== Coloration des régions par statut de couverture =====
+const STATUT_COLORS = {
+  Critique: '#e74c3c',
+  Prioritaire: '#f39c12',
+  Couvert: '#6DBE45',
+};
+const STATUT_DEFAULT_COLOR = '#7f8c8d';
+const MIN_ZOOM_TO_SHOW_COVERAGE = 7; // en dessous de ce niveau, pas de couleur affichée
+
 function FlyToLocation({ coords, zoom }) {
   const map = useMap();
   useEffect(() => {
@@ -28,8 +36,23 @@ function FlyToLocation({ coords, zoom }) {
   return null;
 }
 
+// Suit le niveau de zoom actuel de la carte pour conditionner l'affichage
+// de la coloration des régions.
+function ZoomWatcher({ onZoomChange }) {
+  const map = useMap();
+  useEffect(() => {
+    onZoomChange(map.getZoom());
+  }, [map, onZoomChange]);
+  useMapEvents({
+    zoomend: (e) => onZoomChange(e.target.getZoom()),
+  });
+  return null;
+}
+
 function MapView({ flyTo, onSelectFacility, onSelectRegion, onRoute, destination: extDestination, routeMode: extRouteMode }) {
   const [facilities, setFacilities] = useState([]);
+  const [regionsGeoJson, setRegionsGeoJson] = useState(null);
+  const [currentZoom, setCurrentZoom] = useState(6);
   const [userPosition, setUserPosition] = useState(null);
   const [destination, setDestination] = useState(null);
   const [routeMode, setRouteMode] = useState('driving');
@@ -43,6 +66,16 @@ function MapView({ flyTo, onSelectFacility, onSelectRegion, onRoute, destination
       .catch((err) => {
         console.error('Erreur chargement données:', err);
         setFacilities([]);
+      });
+
+    // Polygones de région + statut de couverture, pour la coloration.
+    // Utilise le client "api" (avec token JWT auto-attaché) car cette route
+    // est protégée côté backend — axios brut n'envoyait pas le token → 401.
+    api.get('/zones/classement/regions/geojson')
+      .then((res) => setRegionsGeoJson(res.data))
+      .catch((err) => {
+        console.error('Erreur chargement polygones régions:', err);
+        setRegionsGeoJson(null);
       });
 
     if (navigator.geolocation) {
@@ -63,14 +96,12 @@ function MapView({ flyTo, onSelectFacility, onSelectRegion, onRoute, destination
   };
 
   // Détecter les clics sur la carte pour les régions
+  // ===== INCHANGÉ : c'est ta logique existante, je n'y touche pas =====
   function MapClickHandler() {
     useMapEvents({
       click: (e) => {
         const { lat, lng } = e.latlng;
-        // Chercher la région correspondant à ce clic
         if (onSelectRegion && facilities.length > 0) {
-          // Logique simple : vérifier si le clic est dans une zone de région
-          // Pour simplifier, on utilise une approximation basée sur les coordonnées
           const clickedRegion = findRegionAtPoint(lat, lng, facilities);
           if (clickedRegion) {
             onSelectRegion(clickedRegion);
@@ -81,9 +112,7 @@ function MapView({ flyTo, onSelectFacility, onSelectRegion, onRoute, destination
     return null;
   }
 
-  // Fonction pour trouver la région à un point donné
   const findRegionAtPoint = (lat, lng, facilities) => {
-    // Regrouper les établissements par région
     const regionMap = {};
     facilities.forEach(f => {
       const region = f.properties.adm1Name;
@@ -95,17 +124,16 @@ function MapView({ flyTo, onSelectFacility, onSelectRegion, onRoute, destination
       }
     });
 
-    // Trouver la région la plus proche (avec le plus d'établissements à proximité)
     let closestRegion = null;
     let maxCount = 0;
-    const threshold = 0.5; // environ 50km
+    const threshold = 0.5;
 
     Object.entries(regionMap).forEach(([region, regionFacilities]) => {
       const count = regionFacilities.filter(f => {
         const [flng, flat] = f.geometry.coordinates;
         return Math.abs(flat - lat) < threshold && Math.abs(flng - lng) < threshold;
       }).length;
-      
+
       if (count > maxCount) {
         maxCount = count;
         closestRegion = region;
@@ -113,6 +141,17 @@ function MapView({ flyTo, onSelectFacility, onSelectRegion, onRoute, destination
     });
 
     return closestRegion ? { name: closestRegion, facilities: regionMap[closestRegion] || [] } : null;
+  };
+
+  const regionStyle = (feature) => {
+    const statut = feature?.properties?.statut;
+    const color = STATUT_COLORS[statut] || STATUT_DEFAULT_COLOR;
+    return {
+      fillColor: color,
+      color,
+      weight: 1.5,
+      fillOpacity: 0.28,
+    };
   };
 
   return (
@@ -126,6 +165,34 @@ function MapView({ flyTo, onSelectFacility, onSelectRegion, onRoute, destination
         attribution='&copy; OpenStreetMap contributors'
       />
 
+      <ZoomWatcher onZoomChange={setCurrentZoom} />
+
+      {/* Calque de coloration par statut — le clic ouvre le panneau avec les
+          vraies stats du polygone (backend), plus besoin du fichier
+          communes_population.geojson local.
+          N'apparaît qu'à partir d'un certain niveau de zoom. */}
+      {regionsGeoJson && currentZoom >= MIN_ZOOM_TO_SHOW_COVERAGE && (
+        <GeoJSON
+          key="regions-coverage"
+          data={regionsGeoJson}
+          style={regionStyle}
+          onEachFeature={(feature, layer) => {
+            const p = feature.properties || {};
+            layer.bindTooltip(`${p.region} — ${p.statut} (${p.coveragePercent}%)`, { sticky: true });
+            layer.on({
+              mouseover: (e) => e.target.setStyle({ fillOpacity: 0.5 }),
+              mouseout: (e) => e.target.setStyle({ fillOpacity: 0.28 }),
+              click: (e) => {
+                // Empêche le clic de "tomber" aussi sur MapClickHandler
+                // (qui utilise encore l'ancienne heuristique de proximité)
+                L.DomEvent.stopPropagation(e);
+                if (onSelectRegion) onSelectRegion(p);
+              },
+            });
+          }}
+        />
+      )}
+
       <MapClickHandler />
 
       {userPosition && effectiveDestination && (
@@ -138,7 +205,7 @@ function MapView({ flyTo, onSelectFacility, onSelectRegion, onRoute, destination
 
       {flyTo && <FlyToLocation coords={flyTo.coords} zoom={flyTo.zoom} />}
 
-      {/* Légende */}
+      {/* Légende établissements */}
       <div style={{
         position: 'absolute', bottom: '30px', right: '10px',
         zIndex: 1000, background: 'white', padding: '10px',
@@ -157,6 +224,21 @@ function MapView({ flyTo, onSelectFacility, onSelectRegion, onRoute, destination
         <div><span style={{ color: '#e91e8c' }}>●</span> Maternité</div>
         <div><span style={{ color: '#7f8c8d' }}>●</span> Autre</div>
       </div>
+
+      {/* Légende couverture régionale */}
+      {regionsGeoJson && currentZoom >= MIN_ZOOM_TO_SHOW_COVERAGE && (
+        <div style={{
+          position: 'absolute', bottom: '30px', left: '10px',
+          zIndex: 1000, background: 'white', padding: '10px',
+          borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+          fontSize: '12px'
+        }}>
+          <b>Couverture par région</b>
+          <div><span style={{ color: STATUT_COLORS.Critique }}>■</span> Critique (&lt;25%)</div>
+          <div><span style={{ color: STATUT_COLORS.Prioritaire }}>■</span> Prioritaire (25–49%)</div>
+          <div><span style={{ color: STATUT_COLORS.Couvert }}>■</span> Couvert (≥50%)</div>
+        </div>
+      )}
 
       <MarkerClusterGroup chunkedLoading maxClusterRadius={60}>
         {(facilities || []).map((feature, index) => {

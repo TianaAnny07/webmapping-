@@ -9,7 +9,7 @@ import { buildStepInstruction } from '../../services/instructions';
  * calculé par le parent (VisitorApp) à partir de la vraie position GPS.
  */
 const VoiceGuide = forwardRef(function VoiceGuide(
-  { route, isActive, currentStepIndex = 0, offRouteMeters = 0 },
+  { route, isActive, currentStepIndex = 0, offRouteMeters = 0, userName = '' },
   ref
 ) {
   const speechRef = useRef(null);
@@ -63,13 +63,15 @@ const VoiceGuide = forwardRef(function VoiceGuide(
     if (!isActive || !route || hasGreetedRef.current) return;
     hasGreetedRef.current = true;
     const destinationName = route.facilityName || 'votre destination';
+    // Salutation personnalisée avec le prénom si on le connaît.
+    const greeting = userName ? `Bonjour ${userName}` : 'Bonjour';
     const timer = setTimeout(() => {
-      speak(`Bonjour, je vais vous guider jusqu'à ${destinationName}. ${describeStep(route.steps?.[0])}`);
+      speak(`${greeting}, je vais vous guider jusqu'à ${destinationName}. ${describeStep(route.steps?.[0])}`);
       lastSpokenStepRef.current = 0;
     }, 600);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive, route?.facilityId]);
+  }, [isActive, route?.facilityId, userName]);
 
   // Annonce à chaque VRAI changement d'étape (poussé par la position GPS du parent)
   useEffect(() => {
