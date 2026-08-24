@@ -3,7 +3,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { FacilitiesService } from './facilities.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AdminGuard } from '../auth/admin.guard';
-
+import { Multer } from 'multer';
 @Controller('facilities')
 export class FacilitiesController {
   constructor(private readonly facilitiesService: FacilitiesService) {}
@@ -51,6 +51,7 @@ export class FacilitiesController {
       facilities: this.facilitiesService.findAll(),
     };
   }
+
 
   @Get(':id')
   findOne(@Param('id') id: number) {

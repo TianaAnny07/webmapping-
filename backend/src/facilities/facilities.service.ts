@@ -170,4 +170,20 @@ async importFromGeoJson(file: Express.Multer.File) {
   });
   return { message: `Établissement ${id} mis à jour` };
 }
+async getStatsByRegion() {
+  const rows: any[] = await this.facilitiesRepository.query(`
+    SELECT
+      COALESCE(adm1_name, 'Inconnue') AS region,
+      COUNT(*) AS count,
+      COUNT(*) FILTER (WHERE amenity = 'hospital' OR healthcare = 'hospital') AS hospitals,
+      COUNT(*) FILTER (WHERE amenity = 'pharmacy' OR healthcare = 'pharmacy') AS pharmacies,
+      COUNT(*) FILTER (WHERE amenity = 'health_post' OR healthcare IN ('nurse','community_health_worker')) AS health_posts,
+      COUNT(*) FILTER (WHERE is_24h) AS open_24h
+    FROM facilities
+    WHERE geom IS NOT NULL
+    GROUP BY adm1_name
+    ORDER BY count DESC
+  `);
+  return rows;
+}
 }
