@@ -5,7 +5,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { FacilitiesModule } from './facilities/facilities.module';
 import { AuthModule } from './auth/auth.module';
-import { RoutingModule } from './routing/routing.module';
+import { ZonesModule } from './zones/zones.module';
 
 @Module({
   imports: [
@@ -28,7 +28,7 @@ import { RoutingModule } from './routing/routing.module';
     }),
     FacilitiesModule,
     AuthModule,
-    RoutingModule,
+    ZonesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import 'react-leaflet-cluster/dist/assets/MarkerCluster.css';
@@ -28,6 +28,8 @@ const userIcon = L.divIcon({
   iconAnchor: [9, 9],
 });
 
+/** Icônes des points A / B utilisés pour la mesure de distance manuelle
+ * (aucun rapport avec la position GPS de l'utilisateur). */
 function buildMeasurePointIcon(label, color) {
   return L.divIcon({
     className: '',
@@ -50,6 +52,7 @@ function buildMeasurePointIcon(label, color) {
 const pointAIcon = buildMeasurePointIcon('A', '#f59e0b');
 const pointBIcon = buildMeasurePointIcon('B', '#8b5cf6');
 
+/** Icône illustrative (piéton / moto / voiture) orientée dans la direction du trajet. */
 function buildNavigatingIcon(mode, rotationDeg) {
   const svg = travelIconSvg(mode) || travelIconSvg('driving');
   const size = 40;
@@ -75,11 +78,11 @@ function buildNavigatingIcon(mode, rotationDeg) {
 
 const routeRenderer = L.svg({ padding: 4 });
 
-function FlyTo({ coords, zoom, ts }) {
+function FlyTo({ coords, zoom }) {
   const map = useMap();
   useEffect(() => {
     if (coords) map.flyTo(coords, zoom || map.getZoom(), { duration: 1.2 });
-  }, [coords, zoom, ts, map]);
+  }, [coords, zoom, map]);
   return null;
 }
 
@@ -94,23 +97,29 @@ function FollowUser({ position, active }) {
   return null;
 }
 
-function MeasureClickCapture({ active, onMapClick, manualLocationMode, onManualLocationClick }) {
+function MeasureClickCapture({ active, onMapClick }) {
   useMapEvents({
     click(e) {
-      if (manualLocationMode) {
-        onManualLocationClick([e.latlng.lat, e.latlng.lng]);
-      } else if (active) {
-        onMapClick([e.latlng.lat, e.latlng.lng]);
-      }
+      if (active) onMapClick([e.latlng.lat, e.latlng.lng]);
     },
   });
+  return null;
+}
+
+/** Récupère l'instance Leaflet et la remonte au parent — fonctionne avec
+ * toutes les versions de react-leaflet (useMap() est stable partout,
+ * contrairement à whenCreated qui a disparu en v4). */
+function MapInstanceSetter({ onReady }) {
+  const map = useMap();
+  useEffect(() => {
+    onReady(map);
+  }, [map, onReady]);
   return null;
 }
 
 function VisitorMap({
   facilities,
   userPosition,
-  userAccuracy,
   selectedFacility,
   onSelectFacility,
   flyTo,
@@ -120,11 +129,9 @@ function VisitorMap({
   onMeasureClick,
   measurePointA,
   measurePointB,
-  measureRoute,
   userHeading,
   followHeading = true,
-  onMapClick,
-  manualLocationMode = false,
+  onRequestLocation,
 }) {
   let userMarkerIcon = userIcon;
   if (route?.active && userPosition && route.geometry?.length > 1) {
@@ -137,6 +144,17 @@ function VisitorMap({
 
   const isRotating = !!(route?.active && followHeading && typeof userHeading === 'number');
   const mapRotationDeg = isRotating ? -userHeading : 0;
+
+  const [mapInstance, setMapInstance] = useState(null);
+
+  const handleLocateClick = () => {
+    if (!mapInstance) return;
+    if (userPosition) {
+      mapInstance.flyTo(userPosition, Math.max(mapInstance.getZoom(), 15), { duration: 1 });
+    } else {
+      onRequestLocation?.();
+    }
+  };
 
   return (
     <div
@@ -159,23 +177,21 @@ function VisitorMap({
         <MapContainer
           center={[-18.9249, 47.5185]}
           zoom={6}
-          style={{ height: '100%', width: '100%', cursor: manualLocationMode ? 'crosshair' : measureActive ? 'crosshair' : '' }}
+          style={{ height: '100%', width: '100%', cursor: measureActive ? 'crosshair' : '' }}
           renderer={routeRenderer}
+          zoomControl={false}
         >
+          <MapInstanceSetter onReady={setMapInstance} />
+
           <TileLayer url={config.MAP_TILE_URL} attribution="&copy; OpenStreetMap contributors" />
 
-          {flyTo && <FlyTo coords={flyTo.coords} zoom={flyTo.zoom} ts={flyTo.ts} />}
+          {flyTo && <FlyTo coords={flyTo.coords} zoom={flyTo.zoom} />}
 
           <FollowUser position={userPosition} active={!!route?.active} />
 
-          <MeasureClickCapture 
-            active={measureActive} 
-            onMapClick={onMeasureClick} 
-            manualLocationMode={manualLocationMode}
-            onManualLocationClick={onMapClick}
-          />
+          <MeasureClickCapture active={measureActive} onMapClick={onMeasureClick} />
 
-          {userPosition && route?.active && <Marker position={userPosition} icon={userMarkerIcon} />}
+          {userPosition && <Marker position={userPosition} icon={userMarkerIcon} />}
 
           {route && route.geometry && (
             <>
@@ -206,21 +222,8 @@ function VisitorMap({
           {measurePointA && measurePointB && (
             <Polyline
               positions={[measurePointA, measurePointB]}
-              pathOptions={{ color: '#f59e0b', weight: 2, dashArray: '6 6', opacity: 0.7 }}
+              pathOptions={{ color: '#f59e0b', weight: 3, dashArray: '4 8', opacity: 0.9 }}
             />
-          )}
-          {/* Itinéraire réel de mesure (après validation) */}
-          {measureRoute?.geometry && (
-            <>
-              <Polyline
-                positions={measureRoute.geometry}
-                pathOptions={{ color: '#ffffff', weight: 8, opacity: 0.8, lineCap: 'round', lineJoin: 'round' }}
-              />
-              <Polyline
-                positions={measureRoute.geometry}
-                pathOptions={{ color: '#8b5cf6', weight: 4, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }}
-              />
-            </>
           )}
           {measurePointA && <Marker position={measurePointA} icon={pointAIcon} />}
           {measurePointB && <Marker position={measurePointB} icon={pointBIcon} />}
@@ -243,6 +246,30 @@ function VisitorMap({
             })}
           </MarkerClusterGroup>
         </MapContainer>
+      </div>
+
+      {/* Contrôles hors du wrapper tournant, pour rester toujours visibles
+         même quand la carte pivote (voir followHeading) */}
+      <div className="visitor-map-controls">
+        <div className="visitor-map-zoom-group">
+          <button
+            className="visitor-map-zoom-btn"
+            onClick={() => mapInstance?.zoomIn()}
+            title="Zoomer"
+          >
+            +
+          </button>
+          <button
+            className="visitor-map-zoom-btn"
+            onClick={() => mapInstance?.zoomOut()}
+            title="Dézoomer"
+          >
+            −
+          </button>
+        </div>
+        <button className="visitor-map-locate-btn" onClick={handleLocateClick} title="Centrer sur ma position">
+          <i className="bi bi-crosshair"></i>
+        </button>
       </div>
     </div>
   );

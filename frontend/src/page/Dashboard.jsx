@@ -1,3 +1,4 @@
+// Dashboard.jsx
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/api';
@@ -5,21 +6,32 @@ import api from '../services/api';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import './Dashboard.css';
 
+// ✅ Supprimer l'import inutilisé de TableauDeBord
 import TableauDeBord from './Navbar/TableauDeBord';
 import GestionEtablissements from './Navbar/GestionEtablissements';
 import ListeDonnees from './Navbar/ListeDonnees';
 import CarteDashboard from './Navbar/CarteDashboard';
 import GestionUtilisateurs from './Navbar/GestionUtilisateurs';
+import ClassementZones from './Navbar/ClassementZones';
 import ProfilModal from './Navbar/ProfilModal';
 import LogoutConfirm from '../components/LogoutConfirm';
+
 function Dashboard() {
   const [facilities, setFacilities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeMenu, setActiveMenu] = useState('dashboard');
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  
   const navigate = useNavigate();
   const [user, setUser] = useState(authService.getCurrentUser());
   const [showProfil, setShowProfil] = useState(false);
-const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  
   useEffect(() => {
     fetchFacilities();
   }, []);
@@ -35,15 +47,14 @@ const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
     }
   };
 
- const handleLogout = () => {
-  setShowLogoutConfirm(true);
-};
+  const handleLogout = () => {
+    setShowLogoutConfirm(true);
+  };
 
-const confirmLogout = () => {
-  authService.logout();
-  navigate('/login');
-};
-
+  const confirmLogout = () => {
+    authService.logout();
+    navigate('/login');
+  };
 
   const menuItems = [
     { id: 'dashboard', icon: 'bi-grid-fill', label: 'Tableau de bord' },
@@ -51,15 +62,23 @@ const confirmLogout = () => {
     { id: 'liste', icon: 'bi-table', label: 'Liste des données' },
     { id: 'carte', icon: 'bi-map-fill', label: 'Carte' },
     { id: 'utilisateurs', icon: 'bi-people-fill', label: 'Gestion utilisateurs' },
+    { id: 'classement', icon: 'bi-bar-chart-fill', label: 'Classement des zones' },
   ];
 
   const renderContent = () => {
     switch (activeMenu) {
-      case 'dashboard': return <TableauDeBord />;
-      case 'gestion': return <GestionEtablissements />;
-      case 'liste': return <ListeDonnees facilities={facilities} onRefresh={fetchFacilities} />;
-      case 'carte': return <CarteDashboard facilities={facilities} />;
-      case 'utilisateurs': return <GestionUtilisateurs />;
+      case 'dashboard': 
+         return <TableauDeBord onNavigate={(menuId) => setActiveMenu(menuId)} />;
+      case 'gestion': 
+        return <GestionEtablissements />;
+      case 'liste': 
+        return <ListeDonnees facilities={facilities} onRefresh={fetchFacilities} />;
+      case 'carte': 
+        return <CarteDashboard facilities={facilities} />;
+      case 'utilisateurs': 
+        return <GestionUtilisateurs />;
+      case 'classement': 
+        return <ClassementZones />;
       default: return <TableauDeBord />;
     }
   };
@@ -74,7 +93,6 @@ const confirmLogout = () => {
 
   return (
     <div className="dash-wrapper">
-
       {/* SIDEBAR */}
       <aside className="dash-sidebar">
         <div className="dash-logo">
@@ -111,9 +129,17 @@ const confirmLogout = () => {
 
       {/* MAIN */}
       <div className="dash-main">
-
         {/* HEADER */}
         <header className="dash-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: 'auto', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '6px 14px' }}>
+            <i className="bi bi-clock" style={{ color: '#6DBE45', fontSize: '13px' }}></i>
+            <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)', letterSpacing: '0.5px' }}>
+              {now.toLocaleTimeString('fr-FR')}
+            </span>
+            <span style={{ fontSize: '11px', color: 'var(--text-secondary)', marginLeft: '6px' }}>
+              {now.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
+            </span>
+          </div>
           <button className="dash-logout" onClick={handleLogout}>
             <i className="bi bi-box-arrow-right"></i> Déconnexion
           </button>
@@ -123,26 +149,23 @@ const confirmLogout = () => {
         <div className="dash-content">
           {renderContent()}
         </div>
-
       </div>
 
       {showProfil && (
-  <ProfilModal
-    user={user}
-    onClose={() => setShowProfil(false)}
-    onLogout={handleLogout}
-    onUpdate={(u) => {
-      setUser({ ...user, ...u });
-      setShowProfil(false);
-    }}
-  />
-)}
+        <ProfilModal
+          user={user}
+          onClose={() => setShowProfil(false)}
+          onLogout={handleLogout}
+          onUpdate={(u) => {
+            setUser({ ...user, ...u });
+            setShowProfil(false);
+          }}
+        />
+      )}
 
-{showLogoutConfirm && (
-  <LogoutConfirm onConfirm={confirmLogout} onCancel={() => setShowLogoutConfirm(false)} />
-)}
-
-
+      {showLogoutConfirm && (
+        <LogoutConfirm onConfirm={confirmLogout} onCancel={() => setShowLogoutConfirm(false)} />
+      )}
     </div>
   );
 }

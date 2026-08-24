@@ -73,8 +73,21 @@ export default function useGeolocation() {
           applyPosition(pos, { setPosition, setAccuracy, setHeading, setError });
           onSuccess?.([pos.coords.latitude, pos.coords.longitude]);
         },
-        () => {
-          const msg = "Impossible d'obtenir votre position. Vérifiez les autorisations.";
+        (err) => {
+          let msg;
+          switch (err.code) {
+            case err.PERMISSION_DENIED:
+              msg = "Permission refusée. Autorisez la localisation dans les paramètres du navigateur.";
+              break;
+            case err.POSITION_UNAVAILABLE:
+              msg = "Position indisponible. Vérifiez que le GPS est activé sur votre appareil.";
+              break;
+            case err.TIMEOUT:
+              msg = "Délai dépassé. Le GPS met trop de temps à répondre, réessayez.";
+              break;
+            default:
+              msg = `Erreur de localisation (code ${err.code}). Vérifiez les autorisations.`;
+          }
           setError(msg);
           onError?.(msg);
         },
@@ -90,7 +103,23 @@ export default function useGeolocation() {
       (pos) => {
         applyPosition(pos, { setPosition, setAccuracy, setHeading, setError });
       },
-      () => setError('Signal de localisation perdu.'),
+      (err) => {
+        let msg;
+        switch (err.code) {
+          case err.PERMISSION_DENIED:
+            msg = "Permission refusée. Autorisez la localisation dans les paramètres du navigateur.";
+            break;
+          case err.POSITION_UNAVAILABLE:
+            msg = "Signal GPS perdu. Vérifiez que le GPS est activé.";
+            break;
+          case err.TIMEOUT:
+            msg = "Signal GPS trop lent. Réessayez en extérieur.";
+            break;
+          default:
+            msg = "Signal de localisation perdu.";
+        }
+        setError(msg);
+      },
       { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 }
     );
     setWatching(true);
