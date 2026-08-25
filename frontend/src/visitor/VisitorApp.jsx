@@ -7,6 +7,8 @@ import useGeolocation from './hooks/useGeolocation';
 import useDistanceMeasure from './hooks/useDistanceMeasure';
 import { haversineKm, distanceToRouteMeters } from './utils/geo';
 import { getItinerary, buildFallbackRoute } from './utils/osrm';
+import { reverseGeocode } from './utils/geocode';
+import { fetchCurrentWeather } from './utils/weather';
 import { buildStepInstruction } from '../services/instructions';
 import VisitorMap from './components/VisitorMap';
 import ExplorePanel from './components/ExplorePanel';
@@ -28,6 +30,12 @@ const OFF_ROUTE_THRESHOLD_M = 300;
 const ARRIVAL_THRESHOLD_M = 60;
 const STEP_ADVANCE_THRESHOLD_M = 40;
 const GPS_NOISE_FLOOR_M = 8;
+// Doit correspondre à la durée de l'animation flyTo dans FlyToLocation
+// (map.flyTo(..., { duration: 1.5 }) = 1.5 seconde). On ajoute une petite
+// marge pour laisser l'animation se terminer visuellement avant d'ouvrir
+// la fenêtre de suggestions par-dessus la carte.
+const MAP_FLY_ANIMATION_MS = 1500;
+const SUGGESTIONS_DELAY_MS = MAP_FLY_ANIMATION_MS + 300;
 
 function buildInstructionState(step) {
   if (!step) return { instruction: 'Continuer tout droit', distance: '' };
@@ -66,6 +74,10 @@ function VisitorApp() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showNearbySuggestions, setShowNearbySuggestions] = useState(false);
   const hasSuggestedRef = useRef(false);
+  const suggestionsTimerRef = useRef(null);
+  const [locationLabel, setLocationLabel] = useState(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [weather, setWeather] = useState(null);
   const pendingLocateCallbackRef = useRef(null);
 
   const [voiceGuideRoute, setVoiceGuideRoute] = useState(null);
@@ -281,6 +293,14 @@ function VisitorApp() {
     };
   }, [simulationInterval]);
 
+  useEffect(() => {
+    return () => {
+      if (suggestionsTimerRef.current) {
+        clearTimeout(suggestionsTimerRef.current);
+      }
+    };
+  }, []);
+
   // ===== GÉOLOCALISATION =====
   const requestLocation = useCallback((onGranted) => {
     pendingLocateCallbackRef.current = onGranted || null;
@@ -294,6 +314,37 @@ function VisitorApp() {
     locateOnce(
       (coords) => {
         setFlyTo({ coords, zoom: 16, ts: Date.now() });
+        // Première activation de la position dans cette session : on propose
+        // les établissements les plus proches par catégorie. Les activations
+        // suivantes (ex: relancées depuis un calcul d'itinéraire) ne
+        // redéclenchent pas la fenêtre pour ne pas être intrusif.
+        if (!hasSuggestedRef.current) {
+          hasSuggestedRef.current = true;
+          // On attend que l'animation de la carte vers la position soit
+          // terminée avant d'ouvrir la fenêtre — sinon elle masque la carte
+          // avant même que tu aies vu ton point apparaître dessus.
+          suggestionsTimerRef.current = setTimeout(() => {
+            setShowNearbySuggestions(true);
+          }, SUGGESTIONS_DELAY_MS);
+        }
+        // Reverse geocoding : nom du quartier/commune/district/région,
+        // affiché dans le header. Ne bloque rien d'autre si ça échoue.
+        setLocationLoading(true);
+        reverseGeocode(coords[0], coords[1])
+          .then((result) => setLocationLabel(result))
+          .catch((err) => {
+            console.error('Erreur reverse geocoding:', err);
+            setLocationLabel(null);
+          })
+          .finally(() => setLocationLoading(false));
+
+        fetchCurrentWeather(coords[0], coords[1])
+          .then((result) => setWeather(result))
+          .catch((err) => {
+            console.error('Erreur météo:', err);
+            setWeather(null);
+          });
+
         callback?.(coords);
       },
       (msg) => setAlert({ message: msg, variant: 'warning' })
@@ -574,6 +625,18 @@ function VisitorApp() {
         <LocationConfirm onAccept={handleAcceptLocation} onCancel={handleCancelLocation} />
       )}
 
+      {showNearbySuggestions && (
+        <NearbySuggestions
+          facilities={facilities}
+          position={position}
+          onSelectFacility={(facility) => {
+            setShowNearbySuggestions(false);
+            handleSelectFacility(facility);
+          }}
+          onClose={() => setShowNearbySuggestions(false)}
+        />
+      )}
+
       {showLogoutConfirm && (
         <LogoutConfirm onConfirm={confirmLogout} onCancel={() => setShowLogoutConfirm(false)} />
       )}
@@ -593,6 +656,18 @@ function VisitorApp() {
           <span>SanteGeo Madagascar</span>
         </div>
         <div className="visitor-header__actions">
+          {(locationLabel || locationLoading) && (
+            <div className="visitor-header__location" title={locationLabel?.fullLabel || ''}>
+              <i className="bi bi-geo-alt-fill"></i>
+              {locationLoading ? 'Localisation…' : (locationLabel?.label || 'Position inconnue')}
+            </div>
+          )}
+          {weather && (
+            <div className="visitor-header__weather" title="Météo actuelle à votre position">
+              <span>{weather.icon}</span>
+              <span>{weather.temperature}°C</span>
+            </div>
+          )}
           <button
             className="visitor-header__icon-btn"
             onClick={handleToggleMeasure}
@@ -799,6 +874,7 @@ function VisitorApp() {
               onSelectFacility={handleSelectFacility}
               onRequestNearby={computeNearby}
               geoError={geoError}
+              userRegion={locationLabel?.region || null}
             />
           )}
         </div>

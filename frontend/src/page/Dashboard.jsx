@@ -21,6 +21,9 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [activeMenu, setActiveMenu] = useState('dashboard');
   const [now, setNow] = useState(new Date());
+  // Région à pré-filtrer quand on arrive sur "Classement des zones" depuis
+  // le bouton du panneau carte — null = pas de filtre imposé.
+  const [classementRegionFilter, setClassementRegionFilter] = useState(null);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -56,6 +59,12 @@ function Dashboard() {
     navigate('/login');
   };
 
+  // Appelé par le bouton "Voir le détail par district" du panneau carte
+  const goToClassementForRegion = (region) => {
+    setClassementRegionFilter(region);
+    setActiveMenu('classement');
+  };
+
   const menuItems = [
     { id: 'dashboard', icon: 'bi-grid-fill', label: 'Tableau de bord' },
     { id: 'gestion', icon: 'bi-cloud-upload-fill', label: 'Gestion d\'établissements' },
@@ -74,11 +83,11 @@ function Dashboard() {
       case 'liste': 
         return <ListeDonnees facilities={facilities} onRefresh={fetchFacilities} />;
       case 'carte': 
-        return <CarteDashboard facilities={facilities} />;
+        return <CarteDashboard facilities={facilities} onNavigateToClassement={goToClassementForRegion} />;
       case 'utilisateurs': 
         return <GestionUtilisateurs />;
       case 'classement': 
-        return <ClassementZones />;
+        return <ClassementZones initialRegionFilter={classementRegionFilter} />;
       default: return <TableauDeBord />;
     }
   };
@@ -105,7 +114,14 @@ function Dashboard() {
             <div
               key={item.id}
               className={`dash-nav-item ${activeMenu === item.id ? 'active' : ''}`}
-              onClick={() => setActiveMenu(item.id)}
+              onClick={() => {
+                // Navigation manuelle via le menu : on efface le filtre région
+                // imposé par le bouton du panneau carte, pour ne pas le
+                // ré-appliquer par surprise la prochaine fois qu'on arrive
+                // sur "Classement des zones".
+                setClassementRegionFilter(null);
+                setActiveMenu(item.id);
+              }}
             >
               <i className={`bi ${item.icon}`}></i>
               <span>{item.label}</span>
@@ -131,18 +147,20 @@ function Dashboard() {
       <div className="dash-main">
         {/* HEADER */}
         <header className="dash-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: 'auto', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '6px 14px' }}>
-            <i className="bi bi-clock" style={{ color: '#6DBE45', fontSize: '13px' }}></i>
-            <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)', letterSpacing: '0.5px' }}>
-              {now.toLocaleTimeString('fr-FR')}
-            </span>
-            <span style={{ fontSize: '11px', color: 'var(--text-secondary)', marginLeft: '6px' }}>
-              {now.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
-            </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginLeft: 'auto' }}>
+            <div style={{ textAlign: 'right', lineHeight: 1.3 }}>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                {now.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
+              </div>
+              <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '5px', justifyContent: 'flex-end' }}>
+                <i className="bi bi-clock" style={{ color: '#6DBE45', fontSize: '12px' }}></i>
+                {now.toLocaleTimeString('fr-FR')}
+              </div>
+            </div>
+            <button className="dash-logout" onClick={handleLogout}>
+              <i className="bi bi-box-arrow-right"></i> Déconnexion
+            </button>
           </div>
-          <button className="dash-logout" onClick={handleLogout}>
-            <i className="bi bi-box-arrow-right"></i> Déconnexion
-          </button>
         </header>
 
         {/* CONTENT */}
