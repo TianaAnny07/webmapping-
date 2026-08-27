@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { ZonesService } from './zones.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AdminGuard } from '../auth/admin.guard';
@@ -16,5 +16,12 @@ export class ZonesController {
   @Get('classement/regions/geojson')
   getRegionGeoJson() {
     return this.zonesService.getRegionGeoJson();
+  }
+
+
+  @Post('cache/invalidate')
+  invalidateCache() {
+    this.zonesService.invalidateCache();
+    return { message: 'Cache vidé, le prochain chargement recalculera les données.' };
   }
 }

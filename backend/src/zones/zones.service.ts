@@ -17,12 +17,15 @@ interface ClassementFilters {
   statut?: string;
 }
 
-
-const DETOUR_FACTOR = 1.3; 
+// Hypothèses pour la conversion distance à vol d'oiseau -> temps de trajet.
+// À ajuster/justifier si tu as une meilleure source (ex: vitesse moyenne
+// mesurée sur route rurale malgache).
+const DETOUR_FACTOR = 1.3; // une route ne va jamais en ligne droite
 const CAR_SPEED_KMH = 40;
 const WALK_SPEED_KMH = 4.5;
 
-
+// Statut basé directement sur la couverture population réelle,
+// plus simple à justifier qu'un score composite à poids arbitraires.
 function computeStatut(coveragePercent: number): string {
   if (coveragePercent < 25) return 'Critique';
   if (coveragePercent < 50) return 'Prioritaire';
@@ -43,7 +46,26 @@ function computeTravelMinutes(avgDistanceKm: number) {
 export class ZonesService {
   constructor(private readonly dataSource: DataSource) {}
 
-  async getClassement(filters: ClassementFilters) {
+  // Cache en mémoire : ces calculs (fusion de ~1579 communes, recherche du
+  // plus proche établissement par KNN, etc.) sont lourds et ne changent que
+  // lorsque les données (facilities/communes) changent — pas besoin de tout
+  // refaire à chaque chargement de page.
+  private classementRowsCache: { rows: any[]; timestamp: number } | null = null;
+  private regionGeoJsonCache: { data: any; timestamp: number } | null = null;
+  private readonly CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+
+  /** À appeler après un import/modif de facilities ou communes_population,
+   * pour forcer le recalcul au prochain appel plutôt que d'attendre les 15 min. */
+  invalidateCache() {
+    this.classementRowsCache = null;
+    this.regionGeoJsonCache = null;
+  }
+
+  private isCacheFresh(entry: { timestamp: number } | null): boolean {
+    return !!entry && Date.now() - entry.timestamp < this.CACHE_TTL_MS;
+  }
+
+  private async computeClassementRows(): Promise<any[]> {
     const sql = `
       WITH district_stats AS (
         SELECT
@@ -127,7 +149,7 @@ export class ZonesService {
 
     const raw: ZoneRow[] = await this.dataSource.query(sql);
 
-    const rows = raw.map((r) => {
+    return raw.map((r) => {
       const totalPopulation = Number(r.total_population) || 0;
       const coveredPopulation = Number(r.covered_population) || 0;
       const coveragePercent = Math.min(100, Math.max(0, Number(r.coverage_percent) || 0));
@@ -154,6 +176,16 @@ export class ZonesService {
         statut,
       };
     });
+  }
+
+  async getClassement(filters: ClassementFilters) {
+    let rows: any[];
+    if (this.isCacheFresh(this.classementRowsCache)) {
+      rows = this.classementRowsCache!.rows;
+    } else {
+      rows = await this.computeClassementRows();
+      this.classementRowsCache = { rows, timestamp: Date.now() };
+    }
 
     let filtered = rows;
     if (filters.region) {
@@ -184,6 +216,10 @@ export class ZonesService {
    * agrégées au niveau région. Utilisé pour colorer la carte par statut.
    */
   async getRegionGeoJson() {
+    if (this.isCacheFresh(this.regionGeoJsonCache)) {
+      return this.regionGeoJsonCache!.data;
+    }
+
     const sql = `
       WITH region_stats AS (
         SELECT
@@ -306,9 +342,12 @@ export class ZonesService {
         };
       });
 
-    return {
+    const result = {
       type: 'FeatureCollection' as const,
       features,
     };
+
+    this.regionGeoJsonCache = { data: result, timestamp: Date.now() };
+    return result;
   }
 }
