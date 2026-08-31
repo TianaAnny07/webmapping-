@@ -72,12 +72,13 @@ function VisitorApp() {
   const [alert, setAlert] = useState(null);
   const [showLocationConfirm, setShowLocationConfirm] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [showNearbySuggestions, setShowNearbySuggestions] = useState(false);
+  const [nearbyBannerState, setNearbyBannerState] = useState('closed'); // 'closed' | 'collapsed' | 'expanded' | 'minimized'
   const hasSuggestedRef = useRef(false);
   const suggestionsTimerRef = useRef(null);
   const [locationLabel, setLocationLabel] = useState(null);
   const [locationLoading, setLocationLoading] = useState(false);
   const [weather, setWeather] = useState(null);
+  const lastGeoFetchPositionRef = useRef(null);
   const pendingLocateCallbackRef = useRef(null);
 
   const [voiceGuideRoute, setVoiceGuideRoute] = useState(null);
@@ -324,7 +325,7 @@ function VisitorApp() {
           // terminée avant d'ouvrir la fenêtre — sinon elle masque la carte
           // avant même que tu aies vu ton point apparaître dessus.
           suggestionsTimerRef.current = setTimeout(() => {
-            setShowNearbySuggestions(true);
+            setNearbyBannerState('collapsed');
           }, SUGGESTIONS_DELAY_MS);
         }
         // Reverse geocoding : nom du quartier/commune/district/région,
@@ -625,18 +626,6 @@ function VisitorApp() {
         <LocationConfirm onAccept={handleAcceptLocation} onCancel={handleCancelLocation} />
       )}
 
-      {showNearbySuggestions && (
-        <NearbySuggestions
-          facilities={facilities}
-          position={position}
-          onSelectFacility={(facility) => {
-            setShowNearbySuggestions(false);
-            handleSelectFacility(facility);
-          }}
-          onClose={() => setShowNearbySuggestions(false)}
-        />
-      )}
-
       {showLogoutConfirm && (
         <LogoutConfirm onConfirm={confirmLogout} onCancel={() => setShowLogoutConfirm(false)} />
       )}
@@ -736,6 +725,22 @@ function VisitorApp() {
           />
 
           <div className="visitor-map-overlay-top">
+            {nearbyBannerState !== 'closed' && nearbyBannerState !== 'minimized' && (
+              <NearbySuggestions
+                state={nearbyBannerState}
+                userName={user?.username || ''}
+                facilities={facilities}
+                position={position}
+                onSelectFacility={(facility) => {
+                  setNearbyBannerState('minimized');
+                  handleSelectFacility(facility);
+                }}
+                onExpandToggle={() =>
+                  setNearbyBannerState((s) => (s === 'expanded' ? 'collapsed' : 'expanded'))
+                }
+                onMinimize={() => setNearbyBannerState('minimized')}
+              />
+            )}
             {alert && alert.variant === 'warning' && (
               <AlertBanner
                 message={alert.message}
@@ -813,6 +818,13 @@ function VisitorApp() {
           </div>
 
           <MapLegend />
+
+          {nearbyBannerState === 'minimized' && (
+            <NearbySuggestions
+              state="minimized"
+              onReopen={() => setNearbyBannerState('collapsed')}
+            />
+          )}
 
           {loadingFacilities && (
             <div className="visitor-map-loading">

@@ -8,6 +8,7 @@ import axios from 'axios';
 import 'leaflet/dist/leaflet.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import Routing from './Routing';
+import RecommendationLayer from './RecommendationLayer'; // nouveau
 import config from '../config';
 import api from '../services/api';
 import { getTypeLabel, getCustomIcon, isOpenNow } from '../utils/facilityDisplay';
@@ -49,7 +50,16 @@ function ZoomWatcher({ onZoomChange }) {
   return null;
 }
 
-function MapView({ flyTo, onSelectFacility, onSelectRegion, onRoute, destination: extDestination, routeMode: extRouteMode }) {
+function MapView({
+  flyTo,
+  onSelectFacility,
+  onSelectRegion,
+  onRoute,
+  destination: extDestination,
+  routeMode: extRouteMode,
+  recommandations = [],          // nouveau : sites recommandés (K-Means) pour la région active
+  onVoirDetailRecommandation,    // nouveau : callback "Voir le détail" du popup IA
+}) {
   const [facilities, setFacilities] = useState([]);
   const [regionsGeoJson, setRegionsGeoJson] = useState(null);
   const [currentZoom, setCurrentZoom] = useState(6);
@@ -204,6 +214,14 @@ function MapView({ flyTo, onSelectFacility, onSelectRegion, onRoute, destination
       )}
 
       {flyTo && <FlyToLocation coords={flyTo.coords} zoom={flyTo.zoom} />}
+
+      {/* Nouveau : sites recommandés (K-Means) pour la région active,
+          avec popup "recommandation IA" au clic. Vide si aucune région
+          sélectionnée ou aucune recommandation calculée. */}
+      <RecommendationLayer
+        recommandations={recommandations}
+        onVoirDetail={onVoirDetailRecommandation}
+      />
 
       {/* Légende établissements */}
       <div style={{

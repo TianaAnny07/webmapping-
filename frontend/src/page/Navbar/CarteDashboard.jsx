@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import MapView from '../../components/MapView';
 import FacilityDetailPanel from '../../components/FacilityDetailPanel';
+import api from '../../services/api';
 import './CarteDashboard.css';
 
 const STATUT_COLORS = {
@@ -19,6 +20,8 @@ function CarteDashboard({ facilities }) {
   const [destination, setDestination] = useState(null);
   const [routeMode, setRouteMode] = useState('driving');
   const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [recommandations, setRecommandations] = useState([]);
+  const [selectedRecommandation, setSelectedRecommandation] = useState(null);
 
   // Statistiques globales
   const totalEtablissements = facilities.length;
@@ -64,31 +67,52 @@ function CarteDashboard({ facilities }) {
   const handleFacilityClick = (feature) => {
     setSelectedFacility(feature);
     setSelectedRegion(null);
+    setSelectedRecommandation(null);
     setIsPanelOpen(true);
     const [lon, lat] = feature.geometry.coordinates;
     setFlyTo({ coords: [lat, lon], zoom: 15 });
   };
 
-  // Reçoit directement les properties du polygone région cliqué sur la carte
-  // (region, statut, coveragePercent, avgCarMin, totalPopulation, ...) —
-  // ces stats viennent du backend (zones.service.ts), plus de dépendance au
-  // fichier communes_population.geojson local (qui n'existait pas).
-  const handleRegionClick = (regionProperties) => {
+  const handleRegionClick = async (regionProperties) => {
     setSelectedRegion(regionProperties);
     setSelectedFacility(null);
+    setSelectedRecommandation(null);
     setIsPanelOpen(true);
+
+    const regionName = regionProperties.region || regionProperties.name;
+    if (!regionName) {
+      setRecommandations([]);
+      return;
+    }
+    try {
+      const res = await api.get('/recommandations/implantation', {
+        params: { region: regionName, k: 3 },
+      });
+      setRecommandations(res.data);
+    } catch (err) {
+      console.error('Erreur recommandations implantation:', err);
+      setRecommandations([]);
+    }
   };
 
   const handleClosePanel = () => {
     setSelectedFacility(null);
     setSelectedRegion(null);
+    setSelectedRecommandation(null);
     setDestination(null);
     setIsPanelOpen(false);
+    setRecommandations([]);
   };
 
   const handleRoute = (lat, lon, mode) => {
     setRouteMode(mode);
     setDestination([lat, lon]);
+  };
+
+  const handleVoirDetailRecommandation = (rec) => {
+    setFlyTo({ coords: [rec.lat, rec.lng], zoom: 13 });
+    setSelectedRecommandation(rec);
+    setIsPanelOpen(true);
   };
 
   // Répartition par type d'établissement pour la région sélectionnée —
@@ -205,6 +229,8 @@ function CarteDashboard({ facilities }) {
           onRoute={handleRoute}
           destination={destination}
           routeMode={routeMode}
+          recommandations={recommandations}
+          onVoirDetailRecommandation={handleVoirDetailRecommandation}
         />
 
         {/* PANNEAU LATÉRAL DROIT */}
@@ -216,7 +242,11 @@ function CarteDashboard({ facilities }) {
           <div className="carte-panel-header">
             <h2>
               <i className="bi bi-hospital"></i>
-              {selectedFacility ? ' Établissement de santé' : ' Analyse d\'accessibilité'}
+              {selectedFacility
+                ? ' Établissement de santé'
+                : selectedRecommandation
+                ? ' Site recommandé'
+                : ' Analyse d\'accessibilité'}
             </h2>
             <button className="carte-panel-close" onClick={handleClosePanel}>
               <i className="bi bi-x-lg"></i>
@@ -233,8 +263,112 @@ function CarteDashboard({ facilities }) {
               />
             )}
 
-            {/* Cas 2: Région sélectionnée (polygone cliqué sur la carte) */}
-            {selectedRegion && selectedRegionBreakdown && (
+            {/* Cas 2: Fiche détaillée d'un site recommandé (K-Means) */}
+            {selectedRecommandation && (
+              <div className="carte-region-details">
+                <button
+                  onClick={() => setSelectedRecommandation(null)}
+                  style={{ background: 'none', border: 'none', color: '#6DBE45', cursor: 'pointer', padding: 0, marginBottom: '10px', fontSize: '13px' }}
+                >
+                  <i className="bi bi-arrow-left"></i> Retour à la région
+                </button>
+
+                <h3 className="carte-region-title">
+                  <i className="bi bi-cone-striped" style={{ color: '#E67E22' }}></i>
+                  Site recommandé n°{selectedRecommandation.id}
+                </h3>
+
+                <span
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px',
+                    borderRadius: '20px', fontSize: '12px', fontWeight: 600, marginBottom: '12px',
+                    background: '#fdecea', color: '#e74c3c',
+                  }}
+                >
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#e74c3c' }} />
+                  Zone {selectedRecommandation.statut}
+                </span>
+
+                <p style={{ fontSize: '13px', lineHeight: 1.6, background: '#f8f9fa', padding: '10px', borderRadius: '6px' }}>
+                  <i className="bi bi-info-circle-fill" style={{ color: '#378ADD' }}></i>{' '}
+                  Ce terrain est identifié comme emplacement recommandé pour la construction d'un
+                  nouvel établissement de santé, afin de réduire la distance d'accès aux soins pour
+                  les populations environnantes.
+                </p>
+
+                <div className="carte-panel-stats-grid">
+                  <div className="carte-panel-stat">
+                    <div className="carte-panel-stat-value">{selectedRecommandation.pourcentageCouverture}%</div>
+                    <div className="carte-panel-stat-label">
+                      <i className="bi bi-percent"></i> Population couverte
+                    </div>
+                  </div>
+                  <div className="carte-panel-stat">
+                    <div className="carte-panel-stat-value">
+                      {selectedRecommandation.distancePlusProcheKm ?? '—'} km
+                    </div>
+                    <div className="carte-panel-stat-label">
+                      <i className="bi bi-signpost-2"></i> Centre existant le plus proche
+                    </div>
+                  </div>
+                </div>
+
+                <div className="carte-panel-section">
+                  <h4 className="carte-panel-section-title">
+                    <i className="bi bi-people"></i> Population
+                  </h4>
+                  <div className="carte-panel-list-item">
+                    <span className="carte-panel-list-label">
+                      <i className="bi bi-people-fill"></i> Population desservie estimée
+                    </span>
+                    <span className="carte-panel-list-value">
+                      {selectedRecommandation.populationCouverte.toLocaleString('fr-FR')}
+                    </span>
+                  </div>
+                  <div className="carte-panel-list-item">
+                    <span className="carte-panel-list-label">
+                      <i className="bi bi-geo-alt-fill"></i> Commune la plus proche
+                    </span>
+                    <span className="carte-panel-list-value">{selectedRecommandation.communePlusProche}</span>
+                  </div>
+                </div>
+
+                {/* Nouveau : infos sur le terrain */}
+                <div className="carte-panel-section">
+                  <h4 className="carte-panel-section-title">
+                    <i className="bi bi-building-add"></i> À propos du terrain
+                  </h4>
+                  <div className="carte-panel-list-item">
+                    <span className="carte-panel-list-label">
+                      <i className="bi bi-hospital"></i> Structure suggérée
+                    </span>
+                    <span className="carte-panel-list-value">
+                      {selectedRecommandation.typeEtablissementRecommande}
+                    </span>
+                  </div>
+                  <div className="carte-panel-list-item">
+                    <span className="carte-panel-list-label">
+                      <i className="bi bi-people"></i> Population dans un rayon de 3 km
+                    </span>
+                    <span className="carte-panel-list-value">
+                      {selectedRecommandation.populationRayon3km.toLocaleString('fr-FR')}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="carte-panel-section">
+                  <h4 className="carte-panel-section-title">
+                    <i className="bi bi-list-ul"></i> Communes couvertes ({selectedRecommandation.communesCouvertes.length})
+                  </h4>
+                  <p style={{ fontSize: '13px', color: '#555', margin: 0 }}>
+                    {selectedRecommandation.communesCouvertes.join(', ')}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Cas 3: Région sélectionnée (polygone cliqué sur la carte) */}
+            {selectedRegion && selectedRegionBreakdown && !selectedRecommandation && (
               <div className="carte-region-details">
                 <h3 className="carte-region-title">
                   <i className="bi bi-geo-alt-fill" style={{ color: '#6DBE45' }}></i>
@@ -366,6 +500,18 @@ function CarteDashboard({ facilities }) {
                     <span className="carte-panel-list-value">{selectedRegionBreakdown.functionalRate}%</span>
                   </div>
                 </div>
+
+                {/* Recommandations d'implantation (K-Means) */}
+                {recommandations.length > 0 && (
+                  <div className="carte-panel-section">
+                    <h4 className="carte-panel-section-title">
+                      <i className="bi bi-stars"></i> Sites recommandés ({recommandations.length})
+                    </h4>
+                    <p style={{ fontSize: '12px', color: '#7f8c8d', margin: '0 0 8px' }}>
+                      Cliquez sur <i className="bi bi-cone-striped" style={{ color: '#E67E22' }}></i> sur la carte pour voir le détail de chaque site.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>

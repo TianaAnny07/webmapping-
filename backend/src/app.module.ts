@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { FacilitiesModule } from './facilities/facilities.module';
 import { AuthModule } from './auth/auth.module';
 import { ZonesModule } from './zones/zones.module';
+import { RecommandationModule } from './recommandation/recommandation.module';
 
 @Module({
   imports: [
@@ -23,12 +24,13 @@ import { ZonesModule } from './zones/zones.module';
         password: config.get('DB_PASSWORD'),
         database: config.get('DB_NAME'),
         autoLoadEntities: true,
-        synchronize: true, // uniquement en développement
+        synchronize: true,
       }),
     }),
     FacilitiesModule,
     AuthModule,
     ZonesModule,
+    RecommandationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

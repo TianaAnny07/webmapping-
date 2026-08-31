@@ -1,8 +1,7 @@
 // src/visitor/components/NearbySuggestions.jsx
 
 import React, { useMemo } from 'react';
-import { haversineKm } from '../utils/geo';
-import { formatDistance } from '../utils/geo';
+import { haversineKm, formatDistance } from '../utils/geo';
 
 function upper(s) {
   return (s || '').toUpperCase();
@@ -57,7 +56,23 @@ const CATEGORIES = [
   { key: 'maternite', label: 'Maternité', icon: 'bi-gender-female', color: '#e91e8c', match: matchMaternite },
 ];
 
-function NearbySuggestions({ facilities, position, onSelectFacility, onClose }) {
+/**
+ * Bandeau de suggestion à 3 états :
+ * - 'collapsed' : bandeau compact "Bonjour X 👋 · Toucher pour voir le détail"
+ * - 'expanded'  : le même bandeau, avec la liste des 7 catégories dépliée en dessous
+ * - 'minimized' : réduit à une petite pastille discrète, réouvrable
+ * (état 'closed' = rien ne s'affiche, géré par le parent qui ne monte pas le composant)
+ */
+function NearbySuggestions({
+  state, // 'collapsed' | 'expanded' | 'minimized'
+  userName,
+  facilities,
+  position,
+  onSelectFacility,
+  onExpandToggle,
+  onMinimize,
+  onReopen,
+}) {
   const suggestions = useMemo(() => {
     if (!position || !facilities?.length) return [];
     const [lat, lon] = position;
@@ -79,57 +94,73 @@ function NearbySuggestions({ facilities, position, onSelectFacility, onClose }) 
     }).filter(Boolean);
   }, [position, facilities]);
 
-  return (
-    <div className="nearby-suggest-backdrop" onClick={onClose}>
-      <div className="nearby-suggest" onClick={(e) => e.stopPropagation()}>
-        <div className="nearby-suggest__header">
-          <div className="nearby-suggest__title">
-            <i className="bi bi-geo-alt-fill"></i>
-            Établissements près de vous
-          </div>
-          <button className="nearby-suggest__close" onClick={onClose} aria-label="Fermer">
-            <i className="bi bi-x-lg"></i>
-          </button>
-        </div>
-        <div className="nearby-suggest__sub">
-          Le plus proche de chaque catégorie, selon votre position actuelle.
-        </div>
+  if (state === 'minimized') {
+    return (
+      <button className="nearby-pill" onClick={onReopen} aria-label="Rouvrir les suggestions">
+        <span className="nearby-pill__wave">👋</span>
+      </button>
+    );
+  }
 
-        {suggestions.length === 0 ? (
-          <div className="nearby-suggest__empty">
-            Aucun établissement trouvé autour de vous pour l'instant.
+  const isExpanded = state === 'expanded';
+
+  return (
+    <div className="nearby-banner">
+      <button className="nearby-banner__header" onClick={onExpandToggle}>
+        <div className="nearby-banner__text">
+          <div className="nearby-banner__title">
+            Bonjour {userName || ''} <span className="nearby-banner__wave">👋</span>
           </div>
-        ) : (
-          <div className="nearby-suggest__list">
-            {suggestions.map((s) => (
+          <div className="nearby-banner__subtitle">Toucher pour voir le détail</div>
+        </div>
+        <div className="nearby-banner__actions">
+          <span className="nearby-banner__chevron" aria-label={isExpanded ? 'Réduire' : 'Déplier'}>
+            <i className={`bi ${isExpanded ? 'bi-chevron-up' : 'bi-chevron-down'}`}></i>
+          </span>
+          <span
+            className="nearby-banner__close"
+            role="button"
+            aria-label="Minimiser"
+            onClick={(e) => {
+              e.stopPropagation();
+              onMinimize();
+            }}
+          >
+            <i className="bi bi-x-lg"></i>
+          </span>
+        </div>
+      </button>
+
+      {isExpanded && (
+        <div className="nearby-banner__list">
+          {suggestions.length === 0 ? (
+            <div className="nearby-banner__empty">
+              Aucun établissement trouvé autour de vous pour l'instant.
+            </div>
+          ) : (
+            suggestions.map((s) => (
               <button
                 key={s.key}
-                className="nearby-suggest__card"
+                className="nearby-banner__card"
                 onClick={() => onSelectFacility(s.facility)}
               >
-                <div className="nearby-suggest__icon" style={{ background: s.color }}>
+                <div className="nearby-banner__card-icon" style={{ background: s.color }}>
                   <i className={`bi ${s.icon}`}></i>
                 </div>
-                <div className="nearby-suggest__info">
-                  <div className="nearby-suggest__category">{s.label}</div>
-                  <div className="nearby-suggest__name">
+                <div className="nearby-banner__card-info">
+                  <div className="nearby-banner__card-category">{s.label}</div>
+                  <div className="nearby-banner__card-name">
                     {s.facility.properties.name || 'Formation sanitaire'}
                   </div>
                 </div>
-                <div className="nearby-suggest__distance">
+                <div className="nearby-banner__card-distance">
                   {formatDistance(s.distanceKm * 1000)}
                 </div>
               </button>
-            ))}
-          </div>
-        )}
-
-        <div className="nearby-suggest__footer">
-          <button className="nearby-suggest__search-link" onClick={onClose}>
-            Aucun ne me convient — rechercher moi-même
-          </button>
+            ))
+          )}
         </div>
-      </div>
+      )}
     </div>
   );
 }
