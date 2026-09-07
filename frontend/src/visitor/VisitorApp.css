@@ -2632,3 +2632,38 @@
   animation: nearby-wave 1.8s ease-in-out infinite;
   transform-origin: 70% 70%;
 }
+.visitor-emergency-fab {
+  position: absolute;
+  bottom: 20px;
+  right: 16px;
+  z-index: 950;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: #e74c3c;
+  color: white;
+  border: none;
+  box-shadow: 0 3px 10px rgba(231, 76, 60, 0.45);
+  font-size: 19px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+.visitor-emergency-fab:active {
+  transform: scale(0.94);
+
+}
+/* VisitorApp.css — même gabarit que visitor-header__location / __weather */
+.visitor-header__zone-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 16px;
+  background: #f8f9fa;
+  cursor: default;
+}

@@ -10,6 +10,7 @@ import { getItinerary, buildFallbackRoute } from './utils/osrm';
 import { reverseGeocode } from './utils/geocode';
 import { fetchCurrentWeather } from './utils/weather';
 import { buildStepInstruction } from '../services/instructions';
+import { isOpenNow } from '../utils/facilityDisplay';
 import VisitorMap from './components/VisitorMap';
 import ExplorePanel from './components/ExplorePanel';
 import FacilityDetail from './components/FacilityDetail';
@@ -23,6 +24,7 @@ import NavigationOverlay from './components/NavigationOverlay';
 import VoiceGuide from './components/VoiceGuide';
 import NearbySuggestions from './components/NearbySuggestions';
 import Toast from './components/Toast';
+import ZoneStatusBanner from './components/ZoneStatusBanner';
 import { useFacilitiesCache } from './hooks/useFacilitiesCache';
 import './VisitorApp.css';
 
@@ -30,10 +32,6 @@ const OFF_ROUTE_THRESHOLD_M = 300;
 const ARRIVAL_THRESHOLD_M = 60;
 const STEP_ADVANCE_THRESHOLD_M = 40;
 const GPS_NOISE_FLOOR_M = 8;
-// Doit correspondre à la durée de l'animation flyTo dans FlyToLocation
-// (map.flyTo(..., { duration: 1.5 }) = 1.5 seconde). On ajoute une petite
-// marge pour laisser l'animation se terminer visuellement avant d'ouvrir
-// la fenêtre de suggestions par-dessus la carte.
 const MAP_FLY_ANIMATION_MS = 1500;
 const SUGGESTIONS_DELAY_MS = MAP_FLY_ANIMATION_MS + 300;
 
@@ -72,7 +70,7 @@ function VisitorApp() {
   const [alert, setAlert] = useState(null);
   const [showLocationConfirm, setShowLocationConfirm] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [nearbyBannerState, setNearbyBannerState] = useState('closed'); // 'closed' | 'collapsed' | 'expanded' | 'minimized'
+  const [nearbyBannerState, setNearbyBannerState] = useState('closed');
   const hasSuggestedRef = useRef(false);
   const suggestionsTimerRef = useRef(null);
   const [locationLabel, setLocationLabel] = useState(null);
@@ -85,7 +83,7 @@ function VisitorApp() {
   const [offRouteMeters, setOffRouteMeters] = useState(0);
   const voiceGuideRef = useRef(null);
 
-  const { position, accuracy, heading, error: geoError, watching, locateOnce, startWatch, stopWatch, setPosition } = useGeolocation();
+  const { position, accuracy, heading, error: geoError, locateOnce, startWatch, stopWatch, setPosition } = useGeolocation();
 
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
@@ -103,10 +101,12 @@ function VisitorApp() {
 
   const lastStablePositionRef = useRef(null);
 
-  // Simulation
   const [isSimulating, setIsSimulating] = useState(false);
   const [simulationInterval, setSimulationInterval] = useState(null);
   const [simulationProgress, setSimulationProgress] = useState(0);
+
+  // Statut de couverture de la zone où se trouve l'utilisateur
+  const [zoneStatus, setZoneStatus] = useState(null);
 
   // ===== CHARGEMENT DES ÉTABLISSEMENTS =====
   useEffect(() => {
@@ -133,6 +133,45 @@ function VisitorApp() {
       })
       .finally(() => setLoadingFacilities(false));
   }, [cachedData, saveToCache, cacheLoading]);
+
+  // ===== STATUT DE ZONE (couverture) =====
+  useEffect(() => {
+    if (!position) return;
+    api
+      .get('/zones-publiques/statut-position', {
+        params: { lat: position[0], lng: position[1] },
+      })
+      .then((res) => setZoneStatus(res.data))
+      .catch((err) => {
+        console.error('Erreur statut zone:', err);
+        setZoneStatus(null);
+      });
+  }, [position]);
+
+  // ===== MISE À JOUR DU NOM DE POSITION AU DÉPLACEMENT =====
+  // Ne relance le reverse geocoding que si l'utilisateur s'est déplacé de
+  // plus de 500m depuis le dernier appel, pour éviter de spammer l'API à
+  // chaque micro-mouvement GPS.
+  useEffect(() => {
+    if (!position) return;
+
+    const lastFetched = lastGeoFetchPositionRef.current;
+    const DISTANCE_THRESHOLD_KM = 0.5;
+
+    if (lastFetched) {
+      const movedKm = haversineKm(position[0], position[1], lastFetched[0], lastFetched[1]);
+      if (movedKm < DISTANCE_THRESHOLD_KM) return;
+    }
+
+    lastGeoFetchPositionRef.current = position;
+    setLocationLoading(true);
+    reverseGeocode(position[0], position[1])
+      .then((result) => setLocationLabel(result))
+      .catch((err) => {
+        console.error('Erreur reverse geocoding:', err);
+      })
+      .finally(() => setLocationLoading(false));
+  }, [position]);
 
   // ===== MISE À JOUR DE LA PROGRESSION =====
   useEffect(() => {
@@ -166,10 +205,6 @@ function VisitorApp() {
     const timeHours = distToDestKm / speed;
     setTimeRemaining(Math.round(timeHours * 60));
 
-    // Pendant la simulation, startSimulation() gère lui-même l'avancement des
-    // étapes (index calculé le long de la géométrie simulée). Ce bloc
-    // "GPS réel" ne doit pas tourner en parallèle, sinon les deux mécanismes
-    // se désynchronisent — c'était la cause du décalage voix/déplacement.
     if (isSimulating) return;
 
     const steps = activeRoute.steps;
@@ -210,8 +245,6 @@ function VisitorApp() {
 
     setIsSimulating(true);
     setSimulationProgress(0);
-    // Repart de zéro pour l'indexation d'étapes propre à la simulation —
-    // évite de hériter d'un index laissé par une navigation GPS précédente.
     currentStepIndexRef.current = 0;
     setCurrentStepIndex(0);
     if (activeRoute.steps?.[0]) {
@@ -258,11 +291,6 @@ function VisitorApp() {
 
       setFlyTo({ coords: [point[0], point[1]], zoom: 16, ts: Date.now() });
 
-      // FIX: utilise buildInstructionState (mêmes noms de champs que le reste
-      // de l'app : distanceMeters + buildStepInstruction) au lieu de
-      // step.maneuver?.instruction / step.distance qui n'existent pas dans
-      // ce format de step — c'est ça qui empêchait l'instruction de
-      // s'afficher pendant la simulation.
       if (activeRoute.steps?.length) {
         const stepIndex = Math.floor((currentIndex / totalPoints) * (activeRoute.steps.length - 1));
         if (stepIndex !== currentStepIndexRef.current) {
@@ -316,28 +344,16 @@ function VisitorApp() {
       (coords) => {
         setFlyTo({ coords, zoom: 16, ts: Date.now() });
         // Première activation de la position dans cette session : on propose
-        // les établissements les plus proches par catégorie. Les activations
-        // suivantes (ex: relancées depuis un calcul d'itinéraire) ne
-        // redéclenchent pas la fenêtre pour ne pas être intrusif.
+        // les établissements les plus proches par catégorie.
         if (!hasSuggestedRef.current) {
           hasSuggestedRef.current = true;
-          // On attend que l'animation de la carte vers la position soit
-          // terminée avant d'ouvrir la fenêtre — sinon elle masque la carte
-          // avant même que tu aies vu ton point apparaître dessus.
           suggestionsTimerRef.current = setTimeout(() => {
             setNearbyBannerState('collapsed');
           }, SUGGESTIONS_DELAY_MS);
         }
-        // Reverse geocoding : nom du quartier/commune/district/région,
-        // affiché dans le header. Ne bloque rien d'autre si ça échoue.
-        setLocationLoading(true);
-        reverseGeocode(coords[0], coords[1])
-          .then((result) => setLocationLabel(result))
-          .catch((err) => {
-            console.error('Erreur reverse geocoding:', err);
-            setLocationLabel(null);
-          })
-          .finally(() => setLocationLoading(false));
+        // Le reverse geocoding (nom de position affiché dans le header) est
+        // maintenant géré par le useEffect dédié sur `position`, qui se
+        // redéclenche aussi au fil des déplacements — pas seulement ici.
 
         fetchCurrentWeather(coords[0], coords[1])
           .then((result) => setWeather(result))
@@ -597,6 +613,39 @@ function VisitorApp() {
     setShowToast(true);
   }, [manualLocationMode]);
 
+  // ===== MODE URGENCE =====
+  const handleEmergencyClick = useCallback(() => {
+    if (!position) {
+      requestLocation(() => handleEmergencyClick());
+      return;
+    }
+    const [lat, lon] = position;
+    const ouvertsMaintenant = facilities.filter((f) => {
+      const p = f.properties;
+      return p.is24h || isOpenNow(p.openingTime, p.closingTime, p.is24h);
+    });
+
+    if (ouvertsMaintenant.length === 0) {
+      setToastMessage('Aucun établissement ouvert trouvé à proximité.');
+      setToastVariant('warning');
+      setShowToast(true);
+      return;
+    }
+
+    const plusProche = ouvertsMaintenant
+      .map((f) => {
+        const [flon, flat] = f.geometry.coordinates;
+        return { ...f, __distanceKm: haversineKm(lat, lon, flat, flon) };
+      })
+      .sort((a, b) => a.__distanceKm - b.__distanceKm)[0];
+
+    handleSelectFacility(plusProche);
+    handlePreviewMode('driving', position);
+    setToastMessage(`Établissement ouvert le plus proche : ${plusProche.properties.name || 'centre de santé'} (${plusProche.__distanceKm.toFixed(1)} km)`);
+    setToastVariant('success');
+    setShowToast(true);
+  }, [position, facilities, requestLocation, handleSelectFacility, handlePreviewMode]);
+
   // ===== MAP ROUTE =====
   const mapRoute = activeRoute
     ? { geometry: activeRoute.geometry, active: true, mode: activeRoute.mode, isFallback: activeRoute.isFallback }
@@ -656,6 +705,9 @@ function VisitorApp() {
               <span>{weather.icon}</span>
               <span>{weather.temperature}°C</span>
             </div>
+          )}
+          {zoneStatus && (
+            <ZoneStatusBanner status={zoneStatus} />
           )}
           <button
             className="visitor-header__icon-btn"
@@ -840,6 +892,16 @@ function VisitorApp() {
             <div className="visitor-map-loading visitor-map-loading--error">
               <i className="bi bi-exclamation-triangle-fill"></i> {loadError}
             </div>
+          )}
+
+          {!activeRoute && (
+            <button
+              className="visitor-emergency-fab"
+              onClick={handleEmergencyClick}
+              title="Trouver un établissement ouvert maintenant"
+            >
+              <i className="bi bi-exclamation-triangle-fill"></i>
+            </button>
           )}
         </div>
 

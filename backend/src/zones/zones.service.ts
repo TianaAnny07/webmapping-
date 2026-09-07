@@ -17,15 +17,10 @@ interface ClassementFilters {
   statut?: string;
 }
 
-// Hypothèses pour la conversion distance à vol d'oiseau -> temps de trajet.
-// À ajuster/justifier si tu as une meilleure source (ex: vitesse moyenne
-// mesurée sur route rurale malgache).
-const DETOUR_FACTOR = 1.3; // une route ne va jamais en ligne droite
+const DETOUR_FACTOR = 1.3;
 const CAR_SPEED_KMH = 40;
 const WALK_SPEED_KMH = 4.5;
 
-// Statut basé directement sur la couverture population réelle,
-// plus simple à justifier qu'un score composite à poids arbitraires.
 function computeStatut(coveragePercent: number): string {
   if (coveragePercent < 25) return 'Critique';
   if (coveragePercent < 50) return 'Prioritaire';
@@ -46,16 +41,10 @@ function computeTravelMinutes(avgDistanceKm: number) {
 export class ZonesService {
   constructor(private readonly dataSource: DataSource) {}
 
-  // Cache en mémoire : ces calculs (fusion de ~1579 communes, recherche du
-  // plus proche établissement par KNN, etc.) sont lourds et ne changent que
-  // lorsque les données (facilities/communes) changent — pas besoin de tout
-  // refaire à chaque chargement de page.
   private classementRowsCache: { rows: any[]; timestamp: number } | null = null;
   private regionGeoJsonCache: { data: any; timestamp: number } | null = null;
-  private readonly CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+  private readonly CACHE_TTL_MS = 15 * 60 * 1000;
 
-  /** À appeler après un import/modif de facilities ou communes_population,
-   * pour forcer le recalcul au prochain appel plutôt que d'attendre les 15 min. */
   invalidateCache() {
     this.classementRowsCache = null;
     this.regionGeoJsonCache = null;
@@ -153,11 +142,7 @@ export class ZonesService {
       const totalPopulation = Number(r.total_population) || 0;
       const coveredPopulation = Number(r.covered_population) || 0;
       const coveragePercent = Math.min(100, Math.max(0, Number(r.coverage_percent) || 0));
-
-      // Statut basé directement sur la couverture population réelle,
-      // plus simple à justifier qu'un score composite à poids arbitraires.
       const statut = computeStatut(coveragePercent);
-
       const avgDistanceKm = Number(r.avg_distance_km) || 0;
       const { avgCarMin, avgWalkMin } = computeTravelMinutes(avgDistanceKm);
 
@@ -210,11 +195,6 @@ export class ZonesService {
     };
   }
 
-  /**
-   * Renvoie un FeatureCollection GeoJSON : un polygone par région (adm1),
-   * fusion des communes qui la composent, avec les stats de couverture
-   * agrégées au niveau région. Utilisé pour colorer la carte par statut.
-   */
   async getRegionGeoJson() {
     if (this.isCacheFresh(this.regionGeoJsonCache)) {
       return this.regionGeoJsonCache!.data;
@@ -277,8 +257,6 @@ export class ZonesService {
       region_geom AS (
         SELECT
           TRIM(adm1_en) AS region,
-          -- Simplification légère : polygones plus légers pour l'affichage
-          -- carte, sans casser la topologie.
           ST_SimplifyPreserveTopology(ST_Union(geom), 0.001) AS geom
         FROM communes_population
         WHERE adm1_en IS NOT NULL
@@ -315,7 +293,7 @@ export class ZonesService {
     }> = await this.dataSource.query(sql);
 
     const features = raw
-      .filter((r) => r.geometry_json) // ignore les régions sans géométrie
+      .filter((r) => r.geometry_json)
       .map((r) => {
         const totalPopulation = Number(r.total_population) || 0;
         const coveredPopulation = Number(r.covered_population) || 0;
@@ -349,5 +327,62 @@ export class ZonesService {
 
     this.regionGeoJsonCache = { data: result, timestamp: Date.now() };
     return result;
+  }
+
+  async getStatutPosition(lat: number, lng: number) {
+    const sql = `
+      SELECT
+        TRIM(cp.adm1_en) AS region,
+        COALESCE(cp.mdg_admpop_adm3_2018_t_tl, 0) AS commune_population,
+        EXISTS (
+          SELECT 1 FROM zones_couverture_5km z
+          WHERE ST_Intersects(cp.geom::geography, z.geom::geography)
+        ) AS commune_couverte,
+        (
+          SELECT ST_Distance(
+            ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography,
+            f.geom::geography
+          ) / 1000.0
+          FROM facilities f
+          WHERE f.geom IS NOT NULL
+          ORDER BY ST_SetSRID(ST_MakePoint($2, $1), 4326) <-> f.geom
+          LIMIT 1
+        ) AS distance_plus_proche_km
+      FROM communes_population cp
+      WHERE ST_Contains(cp.geom, ST_SetSRID(ST_MakePoint($2, $1), 4326))
+      LIMIT 1
+    `;
+    const rows = await this.dataSource.query(sql, [lat, lng]);
+
+    if (rows.length === 0) {
+      return { statut: null, message: 'Position hors des données disponibles.' };
+    }
+
+    const row = rows[0];
+    const communeCouverte = row.commune_couverte;
+    const distanceKm = row.distance_plus_proche_km
+      ? Math.round(parseFloat(row.distance_plus_proche_km) * 10) / 10
+      : null;
+
+    const classement = await this.getClassement({ region: row.region });
+    const regionRow = classement.data[0];
+    const coveragePercent = regionRow ? regionRow.coveragePercent : null;
+    const statut =
+      coveragePercent !== null
+        ? computeStatut(coveragePercent)
+        : communeCouverte
+          ? 'Couvert'
+          : 'Critique';
+
+    return {
+      statut,
+      region: row.region,
+      coveragePercent,
+      communeCouverte,
+      distancePlusProcheKm: distanceKm,
+      message: communeCouverte
+        ? `Vous êtes dans une zone bien desservie${coveragePercent !== null ? ` (${coveragePercent}% de couverture)` : ''}.`
+        : `Zone peu couverte — le centre le plus proche est à ${distanceKm ?? '?'} km.`,
+    };
   }
 }
