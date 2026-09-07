@@ -7,7 +7,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList, Itinerary } from '../types';
 import { getItinerary, MODE_SPEEDS_KMH } from '../services/api';
-import { watchPosition } from '../services/location';
+import { watchPosition, startRouteSimulation, stopRouteSimulation } from '../services/location';
 import { haversineKm, distanceToRouteMeters, formatDistance, formatDuration } from '../services/Geo';
 import { describeStep } from '../services/Maneuver';
 import { speak, stopSpeaking, isVoiceEnabled, setVoiceEnabled } from '../services/Speech';
@@ -32,6 +32,18 @@ function getBoundingRegion(coords: { latitude: number; longitude: number }[], pa
   const latitudeDelta = Math.max((maxLat - minLat) * padding, 0.01);
   const longitudeDelta = Math.max((maxLon - minLon) * padding, 0.01);
   return { latitude: (minLat + maxLat) / 2, longitude: (minLon + maxLon) / 2, latitudeDelta, longitudeDelta };
+}
+
+// Cap (direction) entre deux points, en degrés (0 = nord, 90 = est, 270 = ouest)
+function bearingDeg(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const toDeg = (r: number) => (r * 180) / Math.PI;
+  const dLon = toRad(b.longitude - a.longitude);
+  const lat1 = toRad(a.latitude);
+  const lat2 = toRad(b.latitude);
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+  return (toDeg(Math.atan2(y, x)) + 360) % 360;
 }
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Route'>;
@@ -65,6 +77,9 @@ export default function RouteScreen() {
   const [recalculating, setRecalculating] = useState(false);
   
   const [followMode, setFollowMode] = useState(true);
+  const [simulating, setSimulating] = useState(false); // démo en salle
+  const [heading, setHeading] = useState(270); // direction du trajet (degrés)
+  const lastPosRef = useRef<{ latitude: number; longitude: number } | null>(null);
 
   const steps = itinerary.steps;
   const currentStep = steps[stepIndex];
@@ -108,12 +123,20 @@ export default function RouteScreen() {
     return () => {
       watchSub.current?.remove();
       stopSpeaking();
+      stopRouteSimulation();
     };
   }, []);
 
   
   useEffect(() => {
     watchPosition((coords) => {
+      // Oriente le 🚶 / 🏍️ / 🚗 vers la direction du trajet
+      if (lastPosRef.current) {
+        const dM =
+          haversineKm(lastPosRef.current.latitude, lastPosRef.current.longitude, coords.latitude, coords.longitude) * 1000;
+        if (dM > 1) setHeading(bearingDeg(lastPosRef.current, coords));
+      }
+      lastPosRef.current = coords;
       setUserPos(coords);
 
      
@@ -128,7 +151,9 @@ export default function RouteScreen() {
       const distToDestKm = haversineKm(coords.latitude, coords.longitude, facility.latitude, facility.longitude);
       if (distToDestKm * 1000 <= ARRIVAL_THRESHOLD_M) {
         setArrived(true);
-        speak(t('nav_arrived_voice'));
+        stopRouteSimulation();
+        setSimulating(false);
+        speak(`${t('nav_arrived')} : ${facility.name}. ${t('nav_thanks_voice')}`);
         watchSub.current?.remove();
         return;
       }
@@ -182,7 +207,27 @@ export default function RouteScreen() {
 
   const handleStop = () => {
     stopSpeaking();
+    stopRouteSimulation();
+    setSimulating(false);
     navigation.goBack();
+  };
+
+  // Démo en salle : un point virtuel suit l'itinéraire à ~18 km/h
+  const handleToggleSimulation = () => {
+    if (simulating) {
+      stopRouteSimulation();
+      setSimulating(false);
+    } else {
+      // Vitesse MOYENNE de la démo, adaptée au mode choisi :
+      // à pied 15 km/h · moto 30 km/h · voiture 45 km/h
+      const simSpeed = mode === 'walking' ? 15 : mode === 'cycling' ? 30 : 45;
+      startRouteSimulation(
+        itinerary.geometry.map(([lat, lon]) => ({ latitude: lat, longitude: lon })),
+        simSpeed,
+      );
+      setSimulating(true);
+      setFollowMode(true);
+    }
   };
 
   const coords = itinerary.geometry.map(([lat, lon]) => ({ latitude: lat, longitude: lon }));
@@ -197,10 +242,21 @@ export default function RouteScreen() {
         style={StyleSheet.absoluteFill}
         provider={PROVIDER_GOOGLE}
         initialRegion={initialItineraryRegion}
-        showsUserLocation
+        showsUserLocation={!simulating}
         onPanDrag={() => setFollowMode(false)}
       >
         <FloatingMarker coordinate={{ latitude: facility.latitude, longitude: facility.longitude }} category={facility.category} />
+        {/* Petit bonhomme / moto / voiture qui suit le trajet pendant la simulation */}
+        {simulating && userPos && (
+          <Marker coordinate={userPos} anchor={{ x: 0.5, y: 0.5 }} zIndex={10} flat>
+            {/* Emoji seul (sans cercle), pivoté vers la direction du trajet */}
+            <View style={{ transform: [{ rotate: `${heading - 270}deg` }] }}>
+              <Text style={{ fontSize: 30 }}>
+                {mode === 'walking' ? '🚶' : mode === 'cycling' ? '🏍️' : '🚗'}
+              </Text>
+            </View>
+          </Marker>
+        )}
         {coords.length > 0 && (
           <>
             {/* Liseré blanc en dessous : rend le tracé net et lisible sur n'importe quel fond de carte */}
@@ -267,6 +323,10 @@ export default function RouteScreen() {
               {formatDistance(itinerary.distanceMeters)} · {formatDuration(itinerary.durationSeconds)} · {MODE_SPEEDS_KMH[mode]} {t('km_h')}
             </Text>
             <FacilityInfoCard facility={facility} compact />
+            <TouchableOpacity style={[styles.stopBtn, { backgroundColor: simulating ? '#f59e0b' : colors.accent }]} onPress={handleToggleSimulation}>
+              <Ionicons name={simulating ? 'pause-circle' : 'play-circle'} size={18} color="#fff" />
+              <Text style={styles.stopBtnText}>{simulating ? 'Arrêter la simulation' : 'Simuler le trajet'}</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={[styles.stopBtn, { backgroundColor: colors.danger }]} onPress={handleStop}>
               <Ionicons name="stop-circle" size={18} color="#fff" />
               <Text style={styles.stopBtnText}>{t('nav_stop')}</Text>
@@ -300,4 +360,5 @@ const styles = StyleSheet.create({
   routeInfo: { fontSize: 13, marginTop: -6 },
   stopBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 14 },
   stopBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+
 });

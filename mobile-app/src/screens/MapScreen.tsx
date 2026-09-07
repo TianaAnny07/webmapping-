@@ -6,7 +6,7 @@ import { View, StyleSheet, TouchableOpacity, Text, ActivityIndicator, TextInput,
 import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { getFacilityCountByRegion, getCachedFacilities, searchFacilities, RegionCount } from '../services/api';
+import { getFacilityCountByRegion, getCachedFacilities, searchFacilities, getItinerary, RegionCount } from '../services/api';
 import { getCurrentPosition, requestLocationPermission } from '../services/location';
 import { haversineKm } from '../services/Geo';
 import { Facility } from '../types';
@@ -17,17 +17,20 @@ import { useLanguage } from '../context/LanguageContext';
 import FloatingMarker from '../components/FloatingMarker';
 import RegionCountMarker from '../components/RegionCountMarker';
 import MapLegend from '../components/MapLegend';
-import { CATEGORY_META, FacilityCategory } from '../services/facilityCategories';
+import LocationWeatherBar from '../components/LocationWeatherBar';
+import CoverageBanner from '../components/CoverageBanner';
+import { isOpenNow, openLabel } from '../services/openingHours';
+import { CATEGORY_META, CATEGORY_ORDER, FacilityCategory } from '../services/facilityCategories';
 
 const NEARBY_MAX_COUNT = 15;
+// Au-delà de cette distance, une catégorie n'est plus « garantie près de moi »
+const MAX_GUARANTEE_KM = 100;
 const MADAGASCAR_REGION = { latitude: -18.9, longitude: 47.0, latitudeDelta: 8, longitudeDelta: 8 };
 
-function bucketOf(category: FacilityCategory): 'hospital' | 'csb' | 'pharmacy' | 'clinic' | null {
-  if (category === 'chu' || category === 'hospital') return 'hospital';
-  if (category === 'csb1' || category === 'csb2') return 'csb';
-  if (category === 'pharmacy') return 'pharmacy';
-  if (category === 'clinic') return 'clinic';
-  return null; // 'other' et 'maternity' ne sont plus garantis dans "près de moi"
+// Toutes les catégories de la légende sont garanties dans « près de moi » :
+// il y aura toujours au moins l'établissement le plus proche de chaque type.
+function bucketOf(category: FacilityCategory): FacilityCategory {
+  return category;
 }
 
 export default function MapScreen() {
@@ -54,6 +57,42 @@ export default function MapScreen() {
   const [searchError, setSearchError] = useState('');
   const [searchCollapsed, setSearchCollapsed] = useState(false);
 
+  // Mode URGENCE : centre ouvert le plus proche, en un clic
+  const [emergency, setEmergency] = useState<{ facility: Facility; distKm: number } | null>(null);
+  const [emergencyBusy, setEmergencyBusy] = useState(false);
+
+  // Compteurs par région (bulles sur la carte) + fin du cercle de chargement
+  useEffect(() => {
+    (async () => {
+      try {
+        const all = await getCachedFacilities();
+        const map = new Map<string, { count: number; lat: number; lon: number }>();
+        for (const f of all) {
+          const key = f.region || 'Inconnue';
+          const e = map.get(key) || { count: 0, lat: 0, lon: 0 };
+          e.count += 1;
+          e.lat += f.latitude;
+          e.lon += f.longitude;
+          map.set(key, e);
+        }
+        setRegionCounts(
+          Array.from(map.entries())
+            .map(([region, e]) => ({
+              region,
+              count: e.count,
+              latitude: e.lat / e.count,
+              longitude: e.lon / e.count,
+            }))
+            .sort((a, b) => b.count - a.count),
+        );
+      } catch {
+        /* silencieux */
+      } finally {
+        setLoadingRegions(false); // ← le cercle de chargement disparaît
+      }
+    })();
+  }, []);
+
   const centerOn = useCallback((latitude: number, longitude: number, zoom: number) => {
     mapRef.current?.setCamera({ center: { latitude, longitude }, zoom });
   }, []);
@@ -73,12 +112,17 @@ export default function MapScreen() {
     const picked: Facility[] = [];
     const pickedIds = new Set<string>();
     const guaranteed: NearbyToastItem[] = [];
-    (['hospital', 'csb', 'pharmacy', 'clinic'] as const).forEach((bucket) => {
-      const match = withDist.find(({ f }) => bucketOf(f.category) === bucket && !pickedIds.has(f.id));
-      if (match) {
-        picked.push(match.f);
-        pickedIds.add(match.f.id);
-        guaranteed.push({ name: match.f.name, category: match.f.category, distanceKm: match.distKm });
+    CATEGORY_ORDER.forEach((bucket) => {
+      // Suggestions/marqueurs « près de moi » : limités à MAX_GUARANTEE_KM
+      const matchNear = withDist.find(({ f, distKm }) => bucketOf(f.category) === bucket && distKm <= MAX_GUARANTEE_KM && !pickedIds.has(f.id));
+      if (matchNear) {
+        picked.push(matchNear.f);
+        pickedIds.add(matchNear.f.id);
+      }
+      // Notification : toujours les 8 catégories (la distance est affichée à côté)
+      const matchAny = withDist.find(({ f }) => bucketOf(f.category) === bucket);
+      if (matchAny) {
+        guaranteed.push({ name: matchAny.f.name, category: matchAny.f.category, distanceKm: matchAny.distKm });
       }
     });
     for (const { f } of withDist) {
@@ -101,6 +145,51 @@ export default function MapScreen() {
       }, 15000); // 15 secondes
     }
   }, [centerOn]);
+
+  // ===== MODE URGENCE : centre OUVERT le plus proche, en un clic =====
+  const handleEmergency = async () => {
+    if (emergencyBusy) return;
+    setEmergencyBusy(true);
+    try {
+      const granted = await requestLocationPermission();
+      if (!granted) return;
+      const pos = await getCurrentPosition();
+      const all = await getCachedFacilities();
+      const withDist = all
+        .map((f) => ({ f, d: haversineKm(pos.latitude, pos.longitude, f.latitude, f.longitude) }))
+        .sort((a, b) => a.d - b.d);
+      // 1) ceux qui sont ouverts maintenant (24h/24 ou dans les horaires)
+      const open = withDist.filter(({ f }) => isOpenNow(f.openingTime, f.closingTime, f.is24h) !== false);
+      const best = (open.length > 0 ? open : withDist)[0];
+      if (!best) return;
+      setEmergency({ facility: best.f, distKm: Math.round(best.d * 10) / 10 });
+      setShowIndividualMarkers(true);
+      setHighlightedFacility(best.f);
+      centerOn(best.f.latitude, best.f.longitude, 15);
+    } catch {
+      /* silencieux */
+    } finally {
+      setEmergencyBusy(false);
+    }
+  };
+
+  // Itinéraire direct (voiture) vers le centre trouvé en urgence
+  const handleEmergencyRoute = async () => {
+    if (!emergency) return;
+    try {
+      const pos = await getCurrentPosition();
+      const itin = await getItinerary(
+        pos.latitude,
+        pos.longitude,
+        emergency.facility.latitude,
+        emergency.facility.longitude,
+        'driving',
+      );
+      navigation.navigate('Route', { facility: emergency.facility, mode: 'driving', itinerary: itin });
+    } catch {
+      /* silencieux */
+    }
+  };
 
   useEffect(() => {
     if (!query.trim()) {
@@ -228,7 +317,7 @@ export default function MapScreen() {
           badge (chiffre) disparaît quand on touche la cloche, la cloche reste. */}
       {hasNotifications && (
         <TouchableOpacity style={styles.bellBtn} onPress={handleBellPress}>
-          <Ionicons name="notifications" size={24} color="#fff" />
+          <Ionicons name="notifications" size={30} color="#6DBE45" />
           {notifCount > 0 && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{notifCount}</Text>
@@ -256,6 +345,45 @@ export default function MapScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* Barre position + température du jour (comme l'en-tête web) */}
+      <LocationWeatherBar />
+
+      {/* Indicateur zone couverte / peu couverte */}
+      <CoverageBanner />
+
+      {/* Bandeau URGENCE : centre ouvert le plus proche + itinéraire 1 clic */}
+      {emergency && (
+        <View style={styles.emergencyBanner}>
+          <Text style={styles.emergencyTitle} numberOfLines={1}>
+            🚨 {emergency.facility.name}
+          </Text>
+          <Text style={styles.emergencySub}>
+            {openLabel(emergency.facility.openingTime, emergency.facility.closingTime, emergency.facility.is24h)}
+            {' · à '}
+            {emergency.distKm < 1 ? `${Math.round(emergency.distKm * 1000)} m` : `${emergency.distKm} km`}
+          </Text>
+          <View style={styles.emergencyActions}>
+            <TouchableOpacity style={styles.emergencyGo} onPress={handleEmergencyRoute}>
+              <Ionicons name="navigate" size={14} color="#fff" />
+              <Text style={styles.emergencyGoText}>Itinéraire</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setEmergency(null)} style={styles.emergencyClose}>
+              <Ionicons name="close" size={16} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Gros bouton URGENCE */}
+      <TouchableOpacity
+        style={[styles.emergencyBtn, emergencyBusy && { opacity: 0.6 }]}
+        onPress={handleEmergency}
+        disabled={emergencyBusy}
+      >
+        <Ionicons name="alert" size={18} color="#fff" />
+        <Text style={styles.emergencyBtnText}>{emergencyBusy ? '…' : 'URGENCE'}</Text>
+      </TouchableOpacity>
 
       <View style={styles.searchWrap}>
         {searchCollapsed ? (
@@ -335,16 +463,15 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   locateBtn: { position: 'absolute', bottom: 30, right: 20, padding: 12, borderRadius: 30, elevation: 4, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 4 },
-  // Cloche de notification en haut à droite
+  // Cloche de notification en haut à droite : simple cloche verte, sans fond ni bordure
   bellBtn: {
     position: 'absolute', top: 55, right: 16, zIndex: 30,
-    width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#6DBE45', elevation: 5, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 4,
+    width: 44, height: 44, alignItems: 'center', justifyContent: 'center',
   },
   badge: {
-    position: 'absolute', top: -4, right: -4, minWidth: 18, height: 18, borderRadius: 9,
+    position: 'absolute', top: 0, right: 0, minWidth: 18, height: 18, borderRadius: 9,
     backgroundColor: '#ef4444', alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2, borderColor: '#fff', paddingHorizontal: 3,
+    paddingHorizontal: 3,
   },
   badgeText: { color: '#fff', fontWeight: '800', fontSize: 10 },
   loadingBadge: { position: 'absolute', top: 60, alignSelf: 'center', padding: 10, borderRadius: 20, elevation: 3 },
@@ -356,7 +483,30 @@ const styles = StyleSheet.create({
   locationBannerMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
   locationBannerText: { fontSize: 13, fontWeight: '700', flexShrink: 1 },
   locationBannerArrow: { padding: 4 },
-  searchWrap: { position: 'absolute', top: 112, left: 16, right: 16, zIndex: 20, elevation: 20 },
+  searchWrap: { position: 'absolute', top: 146, left: 16, right: 16, zIndex: 20, elevation: 20 },
+  emergencyBtn: {
+    position: 'absolute', bottom: 30, right: 16, zIndex: 30,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#dc2626', borderRadius: 999,
+    paddingHorizontal: 18, paddingVertical: 12,
+    elevation: 6, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 6,
+  },
+  emergencyBtnText: { color: '#fff', fontWeight: '800', fontSize: 13 },
+  emergencyBanner: {
+    position: 'absolute', bottom: 86, left: 16, right: 16, zIndex: 29,
+    backgroundColor: '#dc2626', borderRadius: 14, padding: 12,
+    elevation: 6, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 6,
+  },
+  emergencyTitle: { color: '#fff', fontWeight: '800', fontSize: 14 },
+  emergencySub: { color: '#fecaca', fontSize: 12, marginTop: 2 },
+  emergencyActions: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
+  emergencyGo: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.22)', borderRadius: 10,
+    paddingHorizontal: 14, paddingVertical: 8,
+  },
+  emergencyGoText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+  emergencyClose: { padding: 6 },
   searchBar: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, elevation: 5, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6 },
   searchInput: { flex: 1, fontSize: 13.5 },
   searchChip: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10, maxWidth: '80%', elevation: 5, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6 },

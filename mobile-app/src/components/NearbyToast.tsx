@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, PanResponder } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, PanResponder, ScrollView, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CATEGORY_META, FacilityCategory } from '../services/facilityCategories';
 
@@ -50,11 +50,16 @@ export default function NearbyToast({ visible, greetingName, items, onClose, onI
 
   return (
     <Animated.View
-      {...panResponder.panHandlers}
       style={[styles.toast, { transform: [{ translateY: slideY }] }]}
     >
       {/* En-tête : salutation + actions (réduire/allonger, fermer) */}
-      <TouchableOpacity style={styles.header} activeOpacity={0.8} onPress={() => setExpanded((e) => !e)}>
+      {/* Le glisser-pour-fermer est limité à l'en-tête pour ne pas gêner le scroll */}
+      <TouchableOpacity
+        {...panResponder.panHandlers}
+        style={styles.header}
+        activeOpacity={0.8}
+        onPress={() => setExpanded((e) => !e)}
+      >
         <View style={styles.headerText}>
           <Text style={styles.greeting}>{greeting}</Text>
           <Text style={styles.summary}>{expanded ? summary : 'Toucher pour voir le détail'}</Text>
@@ -72,9 +77,9 @@ export default function NearbyToast({ visible, greetingName, items, onClose, onI
         </View>
       </TouchableOpacity>
 
-      {/* Liste des établissements (visible seulement quand allongé) */}
+      {/* Liste des établissements (visible seulement quand allongé, scrollable) */}
       {expanded && (
-        <View style={styles.list}>
+        <ScrollView style={styles.list} showsVerticalScrollIndicator={true}>
           {items.map((item, index) => {
             const meta = CATEGORY_META[item.category] || CATEGORY_META.other;
             return (
@@ -98,7 +103,7 @@ export default function NearbyToast({ visible, greetingName, items, onClose, onI
               </TouchableOpacity>
             );
           })}
-        </View>
+        </ScrollView>
       )}
     </Animated.View>
   );
@@ -106,7 +111,7 @@ export default function NearbyToast({ visible, greetingName, items, onClose, onI
 
 const styles = StyleSheet.create({
   toast: {
-  position: 'absolute', alignSelf: 'center', top: '32%', // centré verticalement
+  position: 'absolute', alignSelf: 'center', top: '14%', // remonté pour laisser la place à la liste
   width: '90%', maxWidth: 420, zIndex: 40,               // centré horizontalement
   backgroundColor: '#ffffff', borderRadius: 16, padding: 14,
   elevation: 10, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 10,
@@ -120,7 +125,11 @@ const styles = StyleSheet.create({
     width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center',
     backgroundColor: '#f1f5f9',
   },
-  list: { marginTop: 12, borderTopWidth: 1, borderTopColor: '#eef2f7', paddingTop: 8 },
+  list: {
+    marginTop: 12, borderTopWidth: 1, borderTopColor: '#eef2f7', paddingTop: 8,
+    // hauteur max = 55% de l'écran : on peut toujours scroller jusqu'en bas
+    maxHeight: Math.round(Dimensions.get('window').height * 0.55),
+  },
   item: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
   itemIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   itemName: { flex: 1, fontSize: 13, fontWeight: '600', color: '#1e293b' },

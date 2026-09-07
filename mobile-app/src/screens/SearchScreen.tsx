@@ -6,19 +6,22 @@ import { searchFacilities, getNearbyFacilities } from '../services/api';
 import { getCurrentPosition, requestLocationPermission } from '../services/location';
 import { Facility, FacilityType } from '../types';
 import { useTheme } from '../context/Themecontext';
+import { CATEGORY_META, CATEGORY_ORDER, FacilityCategory } from '../services/facilityCategories';
 
-// Types affichés dans le menu déroulant du filtre, avec leur icône.
-const FILTERS: { id: FacilityType | 'all'; label: string; icon: string; color: string }[] = [
+// Filtres = les 8 catégories sanitaires de la légende (+ « Tous »).
+const FILTERS: { id: FacilityCategory | 'all'; label: string; icon: string; color: string }[] = [
   { id: 'all', label: 'Tous', icon: 'apps', color: '#00c9a7' },
-  { id: 'hospital', label: 'Hôpitaux', icon: 'medkit', color: '#00c9a7' },
-  { id: 'csb', label: 'CSB / Centres de santé', icon: 'bandage', color: '#f59e0b' },
-  { id: 'pharmacy', label: 'Pharmacies', icon: 'medkit-outline', color: '#8b5cf6' },
-  { id: 'clinic', label: 'Cliniques', icon: 'business', color: '#0ea5e9' },
+  ...CATEGORY_ORDER.map((c) => ({
+    id: c,
+    label: CATEGORY_META[c].label,
+    icon: CATEGORY_META[c].icon as string,
+    color: CATEGORY_META[c].color,
+  })),
 ];
 
-function filterByType(list: Facility[], type: FacilityType | 'all'): Facility[] {
+function filterByType(list: Facility[], type: FacilityCategory | 'all'): Facility[] {
   if (type === 'all') return list;
-  return list.filter((f) => f.type === type);
+  return list.filter((f) => f.category === type);
 }
 
 function fTypeIcon(type: FacilityType): string {
@@ -49,7 +52,7 @@ export default function SearchScreen() {
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<'search' | 'nearby'>('nearby');
   const [geoError, setGeoError] = useState('');
-  const [filter, setFilter] = useState<FacilityType | 'all'>('all'); // filtre sélectionné
+  const [filter, setFilter] = useState<FacilityCategory | 'all'>('all'); // filtre sélectionné
   const [filterOpen, setFilterOpen] = useState(false); // menu déroulant ouvert/fermé
 
   // Résultats après application du filtre (calcul local = instantané)
