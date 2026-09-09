@@ -243,6 +243,23 @@ function FacilityDetail({
           </div>
         </div>
 
+        {feature.geometry?.coordinates && (
+          <a
+            href={`https://www.google.com/maps?q=${feature.geometry.coordinates[1]},${feature.geometry.coordinates[0]}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+              width: '100%', padding: '11px', borderRadius: '12px',
+              background: '#f0fdf4', border: '1px solid #bbf7d0',
+              color: '#16a34a', fontWeight: 600, fontSize: '14px',
+              textDecoration: 'none', marginBottom: '12px', transition: 'all 0.2s',
+            }}
+          >
+            <i className="bi bi-map-fill"></i> Voir sur Google Maps
+          </a>
+        )}
+
         {isThisRouteActive ? (
           <div className="facility-detail__nav-active">
             <div className="facility-detail__nav-summary">

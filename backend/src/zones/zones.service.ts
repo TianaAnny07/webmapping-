@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 
 interface ZoneRow {
@@ -38,12 +38,30 @@ function computeTravelMinutes(avgDistanceKm: number) {
 }
 
 @Injectable()
-export class ZonesService {
+export class ZonesService implements OnModuleInit {
+  private readonly logger = new Logger(ZonesService.name);
   constructor(private readonly dataSource: DataSource) {}
 
   private classementRowsCache: { rows: any[]; timestamp: number } | null = null;
   private regionGeoJsonCache: { data: any; timestamp: number } | null = null;
   private readonly CACHE_TTL_MS = 15 * 60 * 1000;
+
+  async onModuleInit() {
+    this.logger.log('Pré-chargement du cache classement et GeoJSON régions...');
+    try {
+      await Promise.all([
+        this.computeClassementRows().then((rows) => {
+          this.classementRowsCache = { rows, timestamp: Date.now() };
+          this.logger.log(`Cache classement prêt — ${rows.length} districts`);
+        }),
+        this.getRegionGeoJson().then(() => {
+          this.logger.log('Cache GeoJSON régions prêt');
+        }),
+      ]);
+    } catch (err) {
+      this.logger.error('Erreur pré-chargement cache zones', err);
+    }
+  }
 
   invalidateCache() {
     this.classementRowsCache = null;

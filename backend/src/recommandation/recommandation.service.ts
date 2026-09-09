@@ -6,15 +6,36 @@ export interface RecommandationResult {
   id: number;
   lat: number;
   lng: number;
+  quartier: string | null;
+  district: string | null;
+  region: string | null;
   statut: string;
   populationCouverte: number;
   pourcentageCouverture: number;
   communePlusProche: string;
   communesCouvertes: string[];
   distancePlusProcheKm: number | null;
+  avgCarMin: number;
+  avgWalkMin: number;
   populationRayon3km: number;
   typeEtablissementRecommande: string;
   texte: string;
+}
+
+// Mêmes hypothèses que ZonesService pour la conversion distance -> temps de
+// trajet, dupliquées ici volontairement pour garder ce module autonome.
+const DETOUR_FACTOR = 1.3;
+const CAR_SPEED_KMH = 40;
+const WALK_SPEED_KMH = 4.5;
+
+function computeTravelMinutes(avgDistanceKm: number) {
+  const avgCarMin = avgDistanceKm > 0
+    ? Math.round(((avgDistanceKm * DETOUR_FACTOR) / CAR_SPEED_KMH) * 60)
+    : 0;
+  const avgWalkMin = avgDistanceKm > 0
+    ? Math.round(((avgDistanceKm * DETOUR_FACTOR) / WALK_SPEED_KMH) * 60)
+    : 0;
+  return { avgCarMin, avgWalkMin };
 }
 
 @Injectable()
@@ -82,6 +103,23 @@ export class RecommandationService {
         ? Math.round(parseFloat(distanceRow[0].distance_km) * 10) / 10
         : null;
 
+      const { avgCarMin, avgWalkMin } = computeTravelMinutes(distancePlusProcheKm || 0);
+
+      // Localisation administrative lisible (quartier/fokontany, district, région)
+      const localisationRow = await this.dataSource.query(
+        `
+        SELECT
+          TRIM(adm3_en) AS quartier,
+          TRIM(adm2_en) AS district,
+          TRIM(adm1_en) AS region
+        FROM communes_population
+        WHERE ST_Contains(geom, ST_SetSRID(ST_MakePoint($1, $2), 4326))
+        LIMIT 1
+        `,
+        [cl.centroid.lng, cl.centroid.lat],
+      );
+      const localisation = localisationRow[0] || null;
+
       // Population estimée dans un rayon de 3 km autour du point recommandé
       const populationRayon3km = await this.getPopulationDansRayon(
         cl.centroid.lat,
@@ -94,12 +132,17 @@ export class RecommandationService {
         id: idx + 1,
         lat: cl.centroid.lat,
         lng: cl.centroid.lng,
+        quartier: localisation?.quartier || null,
+        district: localisation?.district || null,
+        region: localisation?.region || null,
         statut: 'Critique',
         populationCouverte: cl.totalPopulation,
         pourcentageCouverture: pourcentage,
         communePlusProche: communePlusProche.communeName,
         communesCouvertes,
         distancePlusProcheKm,
+        avgCarMin,
+        avgWalkMin,
         populationRayon3km,
         typeEtablissementRecommande,
         texte: `Construire un établissement ici couvrirait environ ${pourcentage}% de la population non desservie de cette zone (≈ ${cl.totalPopulation.toLocaleString('fr-FR')} habitants), proche de ${communePlusProche.communeName}.`,
@@ -113,9 +156,6 @@ export class RecommandationService {
     return Math.hypot(p.lat - c.lat, p.lng - c.lng);
   }
 
-  // Population estimée dans un rayon donné (km) autour d'un point, en
-  // pondérant chaque commune par la proportion de sa surface incluse dans
-  // le buffer (plus précis qu'une simple intersection binaire).
   private async getPopulationDansRayon(
     lat: number,
     lng: number,
@@ -135,7 +175,6 @@ export class RecommandationService {
     const result = await this.dataSource.query(sql, [lng, lat, rayonKm * 1000]);
     return Math.round(Number(result[0]?.population_estimee) || 0);
   }
-
 
   private getTypeEtablissementRecommande(populationRayon: number): string {
     if (populationRayon < 5000) return 'Poste de santé / CSB I';

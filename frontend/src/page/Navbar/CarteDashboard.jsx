@@ -2,7 +2,10 @@
 import React, { useState, useMemo } from 'react';
 import MapView from '../../components/MapView';
 import FacilityDetailPanel from '../../components/FacilityDetailPanel';
+import MiniMapSite from '../../components/MiniMapSite';
 import api from '../../services/api';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import './CarteDashboard.css';
 
 const STATUT_COLORS = {
@@ -22,8 +25,8 @@ function CarteDashboard({ facilities }) {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [recommandations, setRecommandations] = useState([]);
   const [selectedRecommandation, setSelectedRecommandation] = useState(null);
+  const [loadingRecommandations, setLoadingRecommandations] = useState(false);
 
-  // Statistiques globales
   const totalEtablissements = facilities.length;
   const totalCHU = facilities.filter(f =>
     f.properties.healthcare === 'hospital' ||
@@ -84,6 +87,7 @@ function CarteDashboard({ facilities }) {
       setRecommandations([]);
       return;
     }
+    setLoadingRecommandations(true);
     try {
       const res = await api.get('/recommandations/implantation', {
         params: { region: regionName, k: 3 },
@@ -92,6 +96,8 @@ function CarteDashboard({ facilities }) {
     } catch (err) {
       console.error('Erreur recommandations implantation:', err);
       setRecommandations([]);
+    } finally {
+      setLoadingRecommandations(false);
     }
   };
 
@@ -115,9 +121,18 @@ function CarteDashboard({ facilities }) {
     setIsPanelOpen(true);
   };
 
-  // Répartition par type d'établissement pour la région sélectionnée —
-  // filtre sur les données déjà chargées côté client (pas de duplication du
-  // calcul de couverture backend), donc ça reste ici.
+  const handleExportPdf = async () => {
+    const element = document.getElementById('fiche-site-recommande');
+    if (!element) return;
+    const canvas = await html2canvas(element);
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const width = pdf.internal.pageSize.getWidth();
+    const height = (canvas.height * width) / canvas.width;
+    pdf.addImage(imgData, 'PNG', 0, 0, width, height);
+    pdf.save(`site-recommande-${selectedRecommandation?.id || ''}.pdf`);
+  };
+
   const selectedRegionBreakdown = useMemo(() => {
     if (!selectedRegion) return null;
     const regionFacilities = facilities.filter(
@@ -131,7 +146,6 @@ function CarteDashboard({ facilities }) {
     const cliniques = regionFacilities.filter(f => f.properties.healthcare === 'clinic').length;
     const pharmacies = regionFacilities.filter(f => f.properties.amenity === 'pharmacy').length;
 
-    // % d'établissements ouverts maintenant — vraie donnée (openingTime/closingTime/is24h)
     const now = new Date();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
     const openNowCount = regionFacilities.filter((f) => {
@@ -149,7 +163,6 @@ function CarteDashboard({ facilities }) {
 
   return (
     <div className="carte-dashboard">
-      {/* Barre de recherche en haut */}
       <div className="carte-search-overlay">
         <div className="carte-search-container">
           <div className="carte-search-box">
@@ -194,7 +207,6 @@ function CarteDashboard({ facilities }) {
         </div>
       </div>
 
-      {/* Statistiques en overlay sur la carte */}
       <div className="carte-stats-overlay">
         <div className="carte-stats-grid">
           <div className="carte-stat-item">
@@ -220,7 +232,6 @@ function CarteDashboard({ facilities }) {
         </div>
       </div>
 
-      {/* La carte en plein écran */}
       <div className="carte-map-fullscreen">
         <MapView
           flyTo={flyTo}
@@ -233,7 +244,6 @@ function CarteDashboard({ facilities }) {
           onVoirDetailRecommandation={handleVoirDetailRecommandation}
         />
 
-        {/* PANNEAU LATÉRAL DROIT */}
         <div
           className={`carte-right-panel ${isPanelOpen ? 'open' : ''} ${
             selectedRegion ? `statut-${selectedRegion.statut?.toLowerCase()}` : ''
@@ -254,7 +264,6 @@ function CarteDashboard({ facilities }) {
           </div>
 
           <div className="carte-panel-content">
-            {/* Cas 1: Établissement de santé sélectionné */}
             {selectedFacility && (
               <FacilityDetailPanel
                 feature={selectedFacility}
@@ -263,9 +272,8 @@ function CarteDashboard({ facilities }) {
               />
             )}
 
-            {/* Cas 2: Fiche détaillée d'un site recommandé (K-Means) */}
             {selectedRecommandation && (
-              <div className="carte-region-details">
+              <div className="carte-region-details" id="fiche-site-recommande">
                 <button
                   onClick={() => setSelectedRecommandation(null)}
                   style={{ background: 'none', border: 'none', color: '#6DBE45', cursor: 'pointer', padding: 0, marginBottom: '10px', fontSize: '13px' }}
@@ -295,6 +303,62 @@ function CarteDashboard({ facilities }) {
                   nouvel établissement de santé, afin de réduire la distance d'accès aux soins pour
                   les populations environnantes.
                 </p>
+
+                <div className="carte-panel-section">
+                  <h4 className="carte-panel-section-title">
+                    <i className="bi bi-geo-alt-fill"></i> Localisation
+                  </h4>
+                  <div className="carte-panel-list-item">
+                    <span className="carte-panel-list-label">
+                      <i className="bi bi-signpost"></i> Quartier / Fokontany
+                    </span>
+                    <span className="carte-panel-list-value">
+                      {selectedRecommandation.quartier || 'Non renseigné'}
+                    </span>
+                  </div>
+                  <div className="carte-panel-list-item">
+                    <span className="carte-panel-list-label">
+                      <i className="bi bi-signpost-split"></i> District
+                    </span>
+                    <span className="carte-panel-list-value">
+                      {selectedRecommandation.district || 'Non renseigné'}
+                    </span>
+                  </div>
+                  <div className="carte-panel-list-item">
+                    <span className="carte-panel-list-label">
+                      <i className="bi bi-crosshair"></i> Coordonnées GPS
+                    </span>
+                    <span className="carte-panel-list-value">
+                      {selectedRecommandation.lat.toFixed(5)}, {selectedRecommandation.lng.toFixed(5)}
+                    </span>
+                  </div>
+
+                                    <MiniMapSite lat={selectedRecommandation.lat} lng={selectedRecommandation.lng} />
+
+                  
+                    <a href={`https://www.google.com/maps/@${selectedRecommandation.lat},${selectedRecommandation.lng},18z/data=!3m1!1e3`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="carte-panel-external-link"
+                  >
+                    <i className="bi bi-globe-americas"></i> Voir le terrain sur Google Maps (satellite)
+                  </a>
+                </div>
+                <div className="carte-panel-section">
+                  <h4 className="carte-panel-section-title">
+                    <i className="bi bi-signpost-2"></i> Temps de trajet estimé
+                  </h4>
+                  <div className="carte-panel-stats-grid">
+                    <div className="carte-panel-stat">
+                      <div className="carte-panel-stat-value">{selectedRecommandation.avgCarMin} min</div>
+                      <div className="carte-panel-stat-label"><i className="bi bi-car-front-fill"></i> En voiture</div>
+                    </div>
+                    <div className="carte-panel-stat">
+                      <div className="carte-panel-stat-value">{selectedRecommandation.avgWalkMin} min</div>
+                      <div className="carte-panel-stat-label"><i className="bi bi-person-walking"></i> À pied</div>
+                    </div>
+                  </div>
+                </div>
 
                 <div className="carte-panel-stats-grid">
                   <div className="carte-panel-stat">
@@ -333,7 +397,6 @@ function CarteDashboard({ facilities }) {
                   </div>
                 </div>
 
-                {/* Nouveau : infos sur le terrain */}
                 <div className="carte-panel-section">
                   <h4 className="carte-panel-section-title">
                     <i className="bi bi-building-add"></i> À propos du terrain
@@ -364,10 +427,13 @@ function CarteDashboard({ facilities }) {
                     {selectedRecommandation.communesCouvertes.join(', ')}
                   </p>
                 </div>
+
+                <button onClick={handleExportPdf} className="carte-panel-export-btn">
+                  <i className="bi bi-file-earmark-pdf"></i> Exporter en PDF
+                </button>
               </div>
             )}
 
-            {/* Cas 3: Région sélectionnée (polygone cliqué sur la carte) */}
             {selectedRegion && selectedRegionBreakdown && !selectedRecommandation && (
               <div className="carte-region-details">
                 <h3 className="carte-region-title">
@@ -390,7 +456,6 @@ function CarteDashboard({ facilities }) {
                   {selectedRegion.statut}
                 </span>
 
-                {/* Statistiques de couverture (backend) */}
                 <div className="carte-panel-stats-grid">
                   <div className="carte-panel-stat">
                     <div className="carte-panel-stat-value">{selectedRegion.coveragePercent}%</div>
@@ -406,7 +471,6 @@ function CarteDashboard({ facilities }) {
                   </div>
                 </div>
 
-                {/* Établissements de santé (calcul client, données déjà chargées) */}
                 <div className="carte-panel-section">
                   <h4 className="carte-panel-section-title">
                     <i className="bi bi-hospital"></i> Établissements de santé
@@ -461,7 +525,6 @@ function CarteDashboard({ facilities }) {
                   </div>
                 </div>
 
-                {/* Population (backend) */}
                 <div className="carte-panel-section">
                   <h4 className="carte-panel-section-title">
                     <i className="bi bi-people"></i> Population
@@ -488,7 +551,6 @@ function CarteDashboard({ facilities }) {
                   </div>
                 </div>
 
-                {/* Disponibilité (calcul client, vraie donnée) */}
                 <div className="carte-panel-section">
                   <h4 className="carte-panel-section-title">
                     <i className="bi bi-check-circle"></i> Disponibilité
@@ -501,8 +563,15 @@ function CarteDashboard({ facilities }) {
                   </div>
                 </div>
 
-                {/* Recommandations d'implantation (K-Means) */}
-                {recommandations.length > 0 && (
+                {loadingRecommandations && (
+                  <div className="carte-panel-section" style={{ textAlign: 'center', padding: '16px 0' }}>
+                    <div className="mini-spinner" />
+                    <p style={{ fontSize: '12px', color: '#7f8c8d', marginTop: '8px' }}>
+                      Calcul des sites recommandés...
+                    </p>
+                  </div>
+                )}
+                {!loadingRecommandations && recommandations.length > 0 && (
                   <div className="carte-panel-section">
                     <h4 className="carte-panel-section-title">
                       <i className="bi bi-stars"></i> Sites recommandés ({recommandations.length})
