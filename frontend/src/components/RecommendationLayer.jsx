@@ -1,9 +1,61 @@
 import { useState } from 'react';
+
 import { Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 
+// Injection unique des keyframes de pulsation (une seule fois, même si plusieurs markers)
+const PULSE_STYLE_ID = 'site-icon-pulse-keyframes';
+if (typeof document !== 'undefined' && !document.getElementById(PULSE_STYLE_ID)) {
+  const style = document.createElement('style');
+  style.id = PULSE_STYLE_ID;
+  style.innerHTML = `
+    @keyframes site-icon-pulse {
+      0%, 100% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
+      }
+      50% {
+        transform: translate(-50%, -50%) scale(1.4);
+        opacity: 0.3;
+      }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 const siteIcon = new L.DivIcon({
-  html: '<i class="bi bi-cone-striped" style="color:#E67E22; font-size:34px; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4));"></i>',
+  html: `<div style="position: relative; width: 40px; height: 40px;">
+    <div style="
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: rgba(230, 126, 34, 0.25);
+      border: 2px solid rgba(230, 126, 34, 0.4);
+      animation: site-icon-pulse 1.5s ease-in-out infinite;
+    "></div>
+    <div style="
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #E67E22;
+      border: 3px solid white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1;
+    ">
+      <i class="bi bi-lightbulb-fill" style="color:white; font-size: 14px;"></i>
+    </div>
+  </div>`,
   className: '',
   iconSize: [40, 40],
   iconAnchor: [20, 20],
