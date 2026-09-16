@@ -50,7 +50,7 @@ export default function NearbyToast({ visible, greetingName, items, onClose, onI
 
   return (
     <Animated.View
-      style={[styles.toast, { transform: [{ translateY: slideY }] }]}
+      style={[styles.toast, { transform: [{ translateY: slideY }, { translateY: '-50%' }] }]}
     >
       {/* En-tête : salutation + actions (réduire/allonger, fermer) */}
       {/* Le glisser-pour-fermer est limité à l'en-tête pour ne pas gêner le scroll */}
@@ -111,7 +111,7 @@ export default function NearbyToast({ visible, greetingName, items, onClose, onI
 
 const styles = StyleSheet.create({
   toast: {
-  position: 'absolute', alignSelf: 'center', top: '14%', // remonté pour laisser la place à la liste
+  position: 'absolute', alignSelf: 'center', top: '50%', // centré à l'écran
   width: '90%', maxWidth: 420, zIndex: 40,               // centré horizontalement
   backgroundColor: '#ffffff', borderRadius: 16, padding: 14,
   elevation: 10, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 10,

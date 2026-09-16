@@ -18,7 +18,7 @@ import FloatingMarker from '../components/FloatingMarker';
 import RegionCountMarker from '../components/RegionCountMarker';
 import MapLegend from '../components/MapLegend';
 import LocationWeatherBar from '../components/LocationWeatherBar';
-import CoverageBanner from '../components/CoverageBanner';
+import { emergencyBus } from '../services/emergencyBus';
 import { isOpenNow, openLabel } from '../services/openingHours';
 import { CATEGORY_META, CATEGORY_ORDER, FacilityCategory } from '../services/facilityCategories';
 
@@ -57,7 +57,7 @@ export default function MapScreen() {
   const [searchError, setSearchError] = useState('');
   const [searchCollapsed, setSearchCollapsed] = useState(false);
 
-  // Mode URGENCE : centre ouvert le plus proche, en un clic
+  // Mode URGENCE : déclenché par le bouton rouge de la barre de navigation
   const [emergency, setEmergency] = useState<{ facility: Facility; distKm: number } | null>(null);
   const [emergencyBusy, setEmergencyBusy] = useState(false);
 
@@ -142,12 +142,12 @@ export default function MapScreen() {
         setShowToast(true);                 // le toast glisse du haut
         setNotifCount(guaranteed.length);   // badge (ex : 4)
         setHasNotifications(true);          // la cloche devient visible
-      }, 15000); // 15 secondes
+      }, 5000); // 5 secondes
     }
   }, [centerOn]);
 
-  // ===== MODE URGENCE : centre OUVERT le plus proche, en un clic =====
-  const handleEmergency = async () => {
+  // ===== URGENCE : centre OUVERT le plus proche, en un clic =====
+  const handleEmergency = useCallback(async () => {
     if (emergencyBusy) return;
     setEmergencyBusy(true);
     try {
@@ -158,7 +158,6 @@ export default function MapScreen() {
       const withDist = all
         .map((f) => ({ f, d: haversineKm(pos.latitude, pos.longitude, f.latitude, f.longitude) }))
         .sort((a, b) => a.d - b.d);
-      // 1) ceux qui sont ouverts maintenant (24h/24 ou dans les horaires)
       const open = withDist.filter(({ f }) => isOpenNow(f.openingTime, f.closingTime, f.is24h) !== false);
       const best = (open.length > 0 ? open : withDist)[0];
       if (!best) return;
@@ -171,9 +170,8 @@ export default function MapScreen() {
     } finally {
       setEmergencyBusy(false);
     }
-  };
+  }, [centerOn, emergencyBusy]);
 
-  // Itinéraire direct (voiture) vers le centre trouvé en urgence
   const handleEmergencyRoute = async () => {
     if (!emergency) return;
     try {
@@ -191,6 +189,12 @@ export default function MapScreen() {
     }
   };
 
+  // Le bouton rouge de la navbar déclenche handleEmergency
+  useEffect(() => {
+    emergencyBus.set(handleEmergency);
+    return () => emergencyBus.clear();
+  }, [handleEmergency]);
+
   useEffect(() => {
     if (!query.trim()) {
       setResults([]);
@@ -200,7 +204,7 @@ export default function MapScreen() {
     const timer = setTimeout(async () => {
       try {
         const data = await searchFacilities(query);
-        setResults(data.slice(0, 8));
+        setResults(data.slice(0, 8).filter((f) => f.category !== 'other'));
         setSearchError('');
       } catch {
         setSearchError(t('search_error_network'));
@@ -315,17 +319,6 @@ export default function MapScreen() {
       
             {/* CLOCHE : visible une fois que la notification est arrivée ; le
           badge (chiffre) disparaît quand on touche la cloche, la cloche reste. */}
-      {hasNotifications && (
-        <TouchableOpacity style={styles.bellBtn} onPress={handleBellPress}>
-          <Ionicons name="notifications" size={30} color="#6DBE45" />
-          {notifCount > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{notifCount}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      )}
-
       {highlightedFacility && (
         <View style={[styles.locationBanner, { backgroundColor: colors.card }]}>
           <TouchableOpacity
@@ -346,11 +339,8 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* Barre position + température du jour (comme l'en-tête web) */}
+      {/* Barre position + température + couverture (comme l'en-tête web) */}
       <LocationWeatherBar />
-
-      {/* Indicateur zone couverte / peu couverte */}
-      <CoverageBanner />
 
       {/* Bandeau URGENCE : centre ouvert le plus proche + itinéraire 1 clic */}
       {emergency && (
@@ -375,77 +365,79 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* Gros bouton URGENCE */}
-      <TouchableOpacity
-        style={[styles.emergencyBtn, emergencyBusy && { opacity: 0.6 }]}
-        onPress={handleEmergency}
-        disabled={emergencyBusy}
-      >
-        <Ionicons name="alert" size={18} color="#fff" />
-        <Text style={styles.emergencyBtnText}>{emergencyBusy ? '…' : 'URGENCE'}</Text>
-      </TouchableOpacity>
-
       <View style={styles.searchWrap}>
-        {searchCollapsed ? (
-          <TouchableOpacity style={[styles.searchChip, { backgroundColor: colors.card }]} onPress={() => setSearchCollapsed(false)}>
-            <Ionicons name="search" size={14} color={colors.accent} />
-            <Text style={[styles.searchChipText, { color: colors.textPrimary }]} numberOfLines={1}>{query}</Text>
-            <Ionicons name="chevron-down" size={14} color={colors.textSecondary} />
-          </TouchableOpacity>
-        ) : (
-          <>
-            <View style={[styles.searchBar, { backgroundColor: colors.card }]}>
-              <Ionicons name="search" size={18} color={colors.textSecondary} />
-              <TextInput
-                style={[styles.searchInput, { color: colors.textPrimary }]}
-                placeholder={t('search_placeholder_map')}
-                placeholderTextColor={colors.textSecondary}
-                value={query}
-                returnKeyType="search"
-                onFocus={() => setShowResults(true)}
-                onChangeText={(v) => { setQuery(v); setShowResults(true); }}
-                onSubmitEditing={() => { if (results.length > 0) handleSelectResult(results[0]); }}
-              />
-              {query !== '' && (
-                <TouchableOpacity onPress={clearSearch}>
-                  <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {searchError !== '' && (
-              <View style={[styles.resultsBox, { backgroundColor: colors.card, padding: 12 }]}>
-                <Text style={{ color: colors.danger, fontSize: 12.5 }}>{searchError}</Text>
-              </View>
-            )}
-
-            {showResults && results.length > 0 && (
-              <View style={[styles.resultsBox, { backgroundColor: colors.card }]}>
-                <FlatList
-                  data={results}
-                  keyExtractor={(f) => f.id}
-                  keyboardShouldPersistTaps="handled"
-                  renderItem={({ item }) => {
-                    const meta = CATEGORY_META[item.category];
-                    return (
-                      <TouchableOpacity style={styles.resultRow} onPress={() => handleSelectResult(item)}>
-                        <Ionicons name={meta.icon} size={16} color={meta.color} />
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.resultName, { color: colors.textPrimary }]} numberOfLines={1}>{item.name}</Text>
-                          <Text style={[styles.resultSub, { color: colors.textSecondary }]} numberOfLines={1}>
-                            {item.region} · {item.district}
-                          </Text>
-                        </View>
-                        <TouchableOpacity style={styles.resultGo} onPress={() => navigation.navigate('FacilityDetail', { facility: item })}>
-                          <Ionicons name="chevron-forward" size={16} color={colors.accent} />
-                        </TouchableOpacity>
-                      </TouchableOpacity>
-                    );
-                  }}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View style={{ flex: 1 }}>
+            {searchCollapsed ? (
+              <TouchableOpacity style={[styles.searchChip, { backgroundColor: colors.card }]} onPress={() => setSearchCollapsed(false)}>
+                <Ionicons name="search" size={14} color={colors.accent} />
+                <Text style={[styles.searchChipText, { color: colors.textPrimary }]} numberOfLines={1}>{query}</Text>
+                <Ionicons name="chevron-down" size={14} color={colors.textSecondary} />
+              </TouchableOpacity>
+            ) : (
+              <View style={[styles.searchBar, { backgroundColor: colors.card }]}>
+                <Ionicons name="search" size={18} color={colors.textSecondary} />
+                <TextInput
+                  style={[styles.searchInput, { color: colors.textPrimary }]}
+                  placeholder={t('search_placeholder_map')}
+                  placeholderTextColor={colors.textSecondary}
+                  value={query}
+                  returnKeyType="search"
+                  onFocus={() => setShowResults(true)}
+                  onChangeText={(v) => { setQuery(v); setShowResults(true); }}
+                  onSubmitEditing={() => { if (results.length > 0) handleSelectResult(results[0]); }}
                 />
+                {query !== '' && (
+                  <TouchableOpacity onPress={clearSearch}>
+                    <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                )}
               </View>
             )}
-          </>
+          </View>
+
+          {/* Cloche de notification à côté de la barre de recherche */}
+          <TouchableOpacity style={[styles.bellInline, { backgroundColor: colors.card }]} onPress={handleBellPress}>
+            <Ionicons name="notifications" size={20} color="#6DBE45" />
+            {notifCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{notifCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {searchError !== '' && (
+          <View style={[styles.resultsBox, { backgroundColor: colors.card, padding: 12 }]}>
+            <Text style={{ color: colors.danger, fontSize: 12.5 }}>{searchError}</Text>
+          </View>
+        )}
+
+        {showResults && results.length > 0 && (
+          <View style={[styles.resultsBox, { backgroundColor: colors.card }]}>
+            <FlatList
+              data={results}
+              keyExtractor={(f: Facility) => f.id}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item }: { item: Facility }) => {
+                const meta = CATEGORY_META[item.category];
+                return (
+                  <TouchableOpacity style={styles.resultRow} onPress={() => handleSelectResult(item)}>
+                    <Ionicons name={meta.icon} size={16} color={meta.color} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.resultName, { color: colors.textPrimary }]} numberOfLines={1}>{item.name}</Text>
+                      <Text style={[styles.resultSub, { color: colors.textSecondary }]} numberOfLines={1}>
+                        {item.region} · {item.district}
+                      </Text>
+                    </View>
+                    <TouchableOpacity style={styles.resultGo} onPress={() => navigation.navigate('FacilityDetail', { facility: item })}>
+                      <Ionicons name="chevron-forward" size={16} color={colors.accent} />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          </View>
         )}
       </View>
 
@@ -463,10 +455,10 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   locateBtn: { position: 'absolute', bottom: 30, right: 20, padding: 12, borderRadius: 30, elevation: 4, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 4 },
-  // Cloche de notification en haut à droite : simple cloche verte, sans fond ni bordure
-  bellBtn: {
-    position: 'absolute', top: 55, right: 16, zIndex: 30,
-    width: 44, height: 44, alignItems: 'center', justifyContent: 'center',
+  // Cloche de notification collée à la barre de recherche
+  bellInline: {
+    width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
+    elevation: 5, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6,
   },
   badge: {
     position: 'absolute', top: 0, right: 0, minWidth: 18, height: 18, borderRadius: 9,
@@ -483,17 +475,9 @@ const styles = StyleSheet.create({
   locationBannerMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
   locationBannerText: { fontSize: 13, fontWeight: '700', flexShrink: 1 },
   locationBannerArrow: { padding: 4 },
-  searchWrap: { position: 'absolute', top: 146, left: 16, right: 16, zIndex: 20, elevation: 20 },
-  emergencyBtn: {
-    position: 'absolute', bottom: 30, right: 16, zIndex: 30,
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#dc2626', borderRadius: 999,
-    paddingHorizontal: 18, paddingVertical: 12,
-    elevation: 6, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 6,
-  },
-  emergencyBtnText: { color: '#fff', fontWeight: '800', fontSize: 13 },
+  searchWrap: { position: 'absolute', top: 112, left: 16, right: 16, zIndex: 20, elevation: 20 },
   emergencyBanner: {
-    position: 'absolute', bottom: 86, left: 16, right: 16, zIndex: 29,
+    position: 'absolute', bottom: 96, left: 16, right: 16, zIndex: 29,
     backgroundColor: '#dc2626', borderRadius: 14, padding: 12,
     elevation: 6, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 6,
   },

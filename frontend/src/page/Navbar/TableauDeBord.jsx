@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import LoadingGlobe from '../../components/LoadingGlobe';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
@@ -21,6 +22,7 @@ function InvalidateMapSize() {
   }, [map]);
   return null;
 }
+
 
 function TableauDeBord({ onNavigate }) {
   const navigate = useNavigate();
@@ -80,10 +82,7 @@ function TableauDeBord({ onNavigate }) {
   };
 
   if (loading) return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#64748b' }}>
-      <i className="bi bi-hourglass-split" style={{ fontSize: '32px', marginBottom: '12px', color: '#6DBE45' }}></i>
-      <p>Chargement des données...</p>
-    </div>
+        <LoadingGlobe />
   );
 
   // STYLES INLINE

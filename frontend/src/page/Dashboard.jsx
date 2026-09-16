@@ -11,6 +11,7 @@ import TableauDeBord from './Navbar/TableauDeBord';
 import GestionEtablissements from './Navbar/GestionEtablissements';
 import ListeDonnees from './Navbar/ListeDonnees';
 import CarteDashboard from './Navbar/CarteDashboard';
+import LoadingGlobe from '../components/LoadingGlobe';
 import GestionUtilisateurs from './Navbar/GestionUtilisateurs';
 import ClassementZones from './Navbar/ClassementZones';
 import ProfilModal from './Navbar/ProfilModal';
@@ -83,7 +84,7 @@ function Dashboard() {
       case 'liste': 
         return <ListeDonnees facilities={facilities} onRefresh={fetchFacilities} />;
       case 'carte': 
-        return <CarteDashboard facilities={facilities} onNavigateToClassement={goToClassementForRegion} />;
+        return null; // carte montée à part, état préservé
       case 'utilisateurs': 
         return <GestionUtilisateurs />;
       case 'classement': 
@@ -92,12 +93,8 @@ function Dashboard() {
     }
   };
 
-  if (loading) {
-    return (
-      <div style={{ background: '#f4f6f9', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1a1a2e' }}>
-        Chargement...
-      </div>
-    );
+     if (loading) {
+    return <LoadingGlobe />;
   }
 
   return (
@@ -166,6 +163,15 @@ function Dashboard() {
         {/* CONTENT */}
         <div className="dash-content">
           {renderContent()}
+
+          {/* Carte toujours montée : état préservé entre les onglets */}
+          <div style={{ display: activeMenu === 'carte' ? 'block' : 'none' }}>
+            <CarteDashboard
+              facilities={facilities}
+              onNavigateToClassement={goToClassementForRegion}
+              isVisible={activeMenu === 'carte'}
+            />
+          </div>
         </div>
       </div>
 

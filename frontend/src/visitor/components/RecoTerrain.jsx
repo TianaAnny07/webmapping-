@@ -149,7 +149,7 @@ export function RecoMarkers({ reco, simOpen, userPosition }) {
 const fmt = (n) => Number(n || 0).toLocaleString('fr-FR');
 
 /** Panneau moderne (à rendre HORS de la carte, dans VisitorApp) */
-export function RecoTerrainPanel({ recos, index, simOpen, onSim, userPosition, onClose }) {
+export function RecoTerrainPanel({ recos, index, simOpen, onSim, onNavigate, userPosition, onClose }) {
   const reco = recos?.[index];
   if (!reco) return null;
 
@@ -200,6 +200,14 @@ export function RecoTerrainPanel({ recos, index, simOpen, onSim, userPosition, o
         }
         .rp-sim-btn:active{transform:scale(.98)}
         .rp-sim-btn.on{background:linear-gradient(135deg,#6DBE45,#15803d)}
+        .rp-nav-btn{
+          width:100%;display:flex;align-items:center;justify-content:center;gap:10px;
+          border:none;border-radius:14px;padding:13px;cursor:pointer;margin-top:10px;
+          font-size:13.5px;font-weight:800;color:#fff;
+          background:linear-gradient(135deg,#2980b9,#1d4ed8);
+          box-shadow:0 6px 18px rgba(29,78,216,.3); transition:transform .15s;
+        }
+        .rp-nav-btn:active{transform:scale(.98)}
         .rp-sat{display:block;text-align:center;font-size:11px;color:#94a3b8;margin-top:10px;text-decoration:none}
         .rp-sat:hover{color:#64748b}
       `}</style>
@@ -286,6 +294,11 @@ export function RecoTerrainPanel({ recos, index, simOpen, onSim, userPosition, o
           <button className={`rp-sim-btn ${simOpen ? 'on' : ''}`} onClick={onSim}>
             <i className={`bi ${simOpen ? 'bi-stop-fill' : 'bi-hammer'}`} />
             {simOpen ? 'Arrêter la simulation' : "Simuler l'ouverture du centre"}
+          </button>
+
+          <button className="rp-nav-btn" onClick={() => onNavigate && onNavigate(reco)}>
+            <i className="bi bi-sign-turn-right-fill" />
+            Itinéraire vers ce site
           </button>
 
           <a

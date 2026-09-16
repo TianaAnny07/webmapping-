@@ -7,8 +7,10 @@ import L from 'leaflet';
 import axios from 'axios';
 import 'leaflet/dist/leaflet.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
+
+
 import Routing from './Routing';
-import RecommendationLayer from './RecommendationLayer'; // nouveau
+import RecommendationLayer from './RecommendationLayer';
 import config from '../config';
 import api from '../services/api';
 import { getTypeLabel, getCustomIcon, isOpenNow } from '../utils/facilityDisplay';
@@ -27,7 +29,7 @@ const STATUT_COLORS = {
   Couvert: '#6DBE45',
 };
 const STATUT_DEFAULT_COLOR = '#7f8c8d';
-const MIN_ZOOM_TO_SHOW_COVERAGE = 7; // en dessous de ce niveau, pas de couleur affichée
+const MIN_ZOOM_TO_SHOW_COVERAGE = 6; // en dessous de ce niveau, pas de couleur affichée
 
 function FlyToLocation({ coords, zoom }) {
   const map = useMap();
@@ -44,22 +46,36 @@ function ZoomWatcher({ onZoomChange }) {
   useEffect(() => {
     onZoomChange(map.getZoom());
   }, [map, onZoomChange]);
-  useMapEvents({
+    useMapEvents({
     zoomend: (e) => onZoomChange(e.target.getZoom()),
   });
   return null;
 }
 
-function MapView({
-  flyTo,
-  onSelectFacility,
-  onSelectRegion,
-  onRoute,
-  destination: extDestination,
-  routeMode: extRouteMode,
-  recommandations = [],          // nouveau : sites recommandés (K-Means) pour la région active
-  onVoirDetailRecommandation,    // nouveau : callback "Voir le détail" du popup IA
-}) {
+// Répare la taille de la carte quand elle passe de cachée à visible
+function MapResizer({ isVisible }) {
+  const map = useMap();
+  useEffect(() => {
+    const doIt = () => map.invalidateSize();
+    const t1 = setTimeout(doIt, 100);
+    const t2 = setTimeout(doIt, 500);
+    window.addEventListener('resize', doIt);
+    let ro = null;
+    if (window.ResizeObserver && map.getContainer()) {
+      ro = new ResizeObserver(doIt);
+      ro.observe(map.getContainer());
+    }
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      window.removeEventListener('resize', doIt);
+      if (ro) ro.disconnect();
+    };
+  }, [isVisible, map]);
+  return null;
+}
+
+function MapView({ flyTo, onSelectFacility, onSelectRegion, onRoute, destination: extDestination, routeMode: extRouteMode, recommandations = [], onVoirDetailRecommandation, isVisible = true }) {
   const [facilities, setFacilities] = useState([]);
   const [regionsGeoJson, setRegionsGeoJson] = useState(null);
   const [currentZoom, setCurrentZoom] = useState(6);
@@ -175,7 +191,8 @@ function MapView({
         attribution='&copy; OpenStreetMap contributors'
       />
 
-      <ZoomWatcher onZoomChange={setCurrentZoom} />
+            <ZoomWatcher onZoomChange={setCurrentZoom} />
+      <MapResizer isVisible={isVisible} />
 
       {/* Calque de coloration par statut — le clic ouvre le panneau avec les
           vraies stats du polygone (backend), plus besoin du fichier
@@ -213,11 +230,8 @@ function MapView({
         />
       )}
 
-      {flyTo && <FlyToLocation coords={flyTo.coords} zoom={flyTo.zoom} />}
+           {flyTo && <FlyToLocation coords={flyTo.coords} zoom={flyTo.zoom} />}
 
-      {/* Nouveau : sites recommandés (K-Means) pour la région active,
-          avec popup "recommandation IA" au clic. Vide si aucune région
-          sélectionnée ou aucune recommandation calculée. */}
       <RecommendationLayer
         recommandations={recommandations}
         onVoirDetail={onVoirDetailRecommandation}

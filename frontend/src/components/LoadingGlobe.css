@@ -1,0 +1,185 @@
+/* src/components/LoadingGlobe.css */
+
+.loading-globe-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100%;
+  background: #f8fafc;
+  flex-direction: column;
+  animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.loading-globe-wrapper {
+  text-align: center;
+}
+
+/* ===== GLOBE 3D ===== */
+.globe-3d {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  margin: 0 auto 24px;
+  perspective: 800px;
+}
+
+.globe-sphere {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #1a5a2e, #0a2e1a);
+  overflow: hidden;
+  animation: globeRotate 8s linear infinite;
+  box-shadow:
+    0 0 60px rgba(109, 190, 69, 0.15),
+    inset -20px 40px 40px rgba(0, 0, 0, 0.3);
+  transform-style: preserve-3d;
+}
+
+@keyframes globeRotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ===== RINGS ===== */
+.globe-ring {
+  position: absolute;
+  border: 1.5px solid rgba(109, 190, 69, 0.2);
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.ring-1 {
+  width: 90%;
+  height: 90%;
+  animation: ringPulse 4s ease-in-out infinite;
+}
+
+.ring-2 {
+  width: 70%;
+  height: 70%;
+  animation: ringPulse 4s ease-in-out infinite 0.5s;
+}
+
+.ring-3 {
+  width: 50%;
+  height: 50%;
+  animation: ringPulse 4s ease-in-out infinite 1s;
+}
+
+@keyframes ringPulse {
+  0%, 100% { opacity: 0.2; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 0.6; transform: translate(-50%, -50%) scale(1.05); }
+}
+
+/* ===== POINTS ===== */
+.globe-dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: #6DBE45;
+  border-radius: 50%;
+  box-shadow: 0 0 12px rgba(109, 190, 69, 0.5);
+}
+
+.dot-1 { top: 15%; left: 25%; animation: dotPulse 2.5s ease-in-out infinite; }
+.dot-2 { top: 30%; left: 70%; animation: dotPulse 2.5s ease-in-out infinite 0.3s; }
+.dot-3 { top: 50%; left: 15%; animation: dotPulse 2.5s ease-in-out infinite 0.6s; }
+.dot-4 { top: 65%; left: 55%; animation: dotPulse 2.5s ease-in-out infinite 0.9s; }
+.dot-5 { top: 25%; left: 45%; animation: dotPulse 2.5s ease-in-out infinite 1.2s; }
+.dot-6 { top: 75%; left: 35%; animation: dotPulse 2.5s ease-in-out infinite 1.5s; }
+.dot-7 { top: 45%; left: 80%; animation: dotPulse 2.5s ease-in-out infinite 1.8s; }
+.dot-8 { top: 10%; left: 60%; animation: dotPulse 2.5s ease-in-out infinite 2.1s; }
+.dot-9 { top: 85%; left: 20%; animation: dotPulse 2.5s ease-in-out infinite 0.5s; }
+.dot-10 { top: 55%; left: 40%; animation: dotPulse 2.5s ease-in-out infinite 1s; }
+
+@keyframes dotPulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.6); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+/* ===== REFLET ===== */
+.globe-shine {
+  position: absolute;
+  top: 5%;
+  left: 12%;
+  width: 40%;
+  height: 30%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(255, 255, 255, 0.2) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* ===== TEXTE ===== */
+.loading-text {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a2332;
+  margin-top: 20px;
+}
+
+.loading-subtext {
+  font-size: 13px;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
+/* ===== BARRE DE PROGRESSION ===== */
+.loading-progress {
+  width: 200px;
+  max-width: 80%;
+  margin: 16px auto 0;
+  height: 4px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.loading-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #6DBE45, #4a9e2e);
+  border-radius: 4px;
+  animation: progressPulse 2s ease-in-out infinite;
+}
+
+@keyframes progressPulse {
+  0% { width: 0%; }
+  50% { width: 70%; }
+  100% { width: 100%; }
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 480px) {
+  .globe-3d {
+    width: 100px;
+    height: 100px;
+  }
+
+  .globe-sphere {
+    width: 100px;
+    height: 100px;
+  }
+
+  .globe-dot {
+    width: 5px;
+    height: 5px;
+  }
+
+  .loading-text {
+    font-size: 14px;
+  }
+
+  .loading-progress {
+    width: 150px;
+  }
+}

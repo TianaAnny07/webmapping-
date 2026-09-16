@@ -1,4 +1,4 @@
-import { View, ActivityIndicator, Image } from 'react-native';
+import { View, ActivityIndicator, Image, TouchableOpacity, Text } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,16 +13,19 @@ import RegisterScreen from '../screens/RegisterScreen';
 import { RootStackParamList, TabParamList } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/Themecontext';
+import { useNavigation } from '@react-navigation/native';
+import { emergencyBus } from '../services/emergencyBus';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const AuthStack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator<TabParamList>();
 
-const TAB_ICONS: Record<keyof TabParamList, any> = {
-  Map: 'map',
-  Search: 'search',
-  Measure: 'resize-outline',
-  Profile: 'person-circle-outline',
+// [icône pleine (actif), icône contour (inactif)]
+const TAB_ICONS: Record<string, [string, string]> = {
+  Map: ['map', 'map-outline'],
+  Search: ['search', 'search-outline'],
+  Measure: ['ruler', 'ruler-outline'],
+  Profile: ['person-circle', 'person-circle-outline'],
 };
 
 const TAB_TITLES: Record<keyof TabParamList, string> = {
@@ -31,6 +34,33 @@ const TAB_TITLES: Record<keyof TabParamList, string> = {
   Measure: 'Distance',
   Profile: 'Profil',
 };
+
+// Bouton SOS au MILIEU de la barre : rond, rouge, surélevé.
+// Le libellé « Urgence » reste du même style que les autres onglets.
+function EmergencyTabButton() {
+  const navigation = useNavigation<any>();
+  const { colors } = useTheme();
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-start' }}>
+      <TouchableOpacity
+        accessibilityLabel="Urgence"
+        style={{
+          width: 54, height: 54, borderRadius: 27, marginTop: -20,
+          backgroundColor: '#dc2626', borderWidth: 4, borderColor: colors.card,
+          alignItems: 'center', justifyContent: 'center',
+          elevation: 7, shadowColor: '#b91c1c', shadowOpacity: 0.5, shadowRadius: 8,
+        }}
+        onPress={() => {
+          navigation.navigate('Map');
+          setTimeout(() => emergencyBus.trigger(), 150);
+        }}
+      >
+        <Ionicons name="alert-circle" size={28} color="#fff" />
+      </TouchableOpacity>
+      <Text style={{ color: '#94a3b8', fontSize: 10.5, fontWeight: '600', marginTop: 3 }}>Urgence</Text>
+    </View>
+  );
+}
 
 // Ordre des onglets : Carte, Recherche, Distance, Profil.
 function Tabs() {
@@ -57,13 +87,20 @@ function Tabs() {
               />
             );
           }
-          return <Ionicons name={TAB_ICONS[route.name as keyof TabParamList]} size={size} color={color} />;
+          const pair = TAB_ICONS[route.name] || ['map', 'map-outline'];
+          return <Ionicons name={(focused ? pair[0] : pair[1]) as any} size={size} color={color} />;
         },
         tabBarLabel: TAB_TITLES[route.name as keyof TabParamList],
       })}
     >
       <Tab.Screen name="Map" component={MapScreen} />
       <Tab.Screen name="Search" component={SearchScreen} />
+      {/* Bouton SOS au milieu de la barre */}
+      <Tab.Screen
+        name={'Urgence' as any}
+        component={MapScreen}
+        options={{ tabBarButton: () => <EmergencyTabButton /> }}
+      />
       <Tab.Screen name="Measure" component={MeasureScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>

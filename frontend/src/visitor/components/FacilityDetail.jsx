@@ -58,6 +58,8 @@ function getFacilityIcon(healthcare, amenity, name, type) {
 
 function getFacilityColor(healthcare, amenity, name, type) {
   const nomUpper = (name || '').toUpperCase();
+  // Un terrain recommandé (pseudo-établissement) s'affiche en vert SantéGéo
+  if (nomUpper.includes('RECOMMAND')) return '#6DBE45';
   const facilityType = type || healthcare || amenity || '';
   
   if (nomUpper.includes('CHU') || nomUpper.includes('CHR') || nomUpper.includes('CHP') || 
@@ -114,6 +116,7 @@ function FacilityDetail({
   const facilityType = p.healthcare || p.amenity || p.type || '';
   const heroIcon = getFacilityIcon(p.healthcare, p.amenity, p.name, p.type);
   const heroColor = getFacilityColor(p.healthcare, p.amenity, p.name, p.type);
+  const isReco = String(p.id || '').startsWith('reco-');
   const badges = getInfoBadges(p);
 
   const statusClass = p.is24h ? 'open' : open === true ? 'open' : open === false ? 'closed' : 'unknown';
@@ -153,10 +156,16 @@ function FacilityDetail({
             <h2 className="facility-detail__hero-title">{p.name || 'Formation sanitaire'}</h2>
             <div className="facility-detail__hero-type">
               <span>{getTypeLabel(p.healthcare, p.amenity, p.name)}</span>
-              <span className={`facility-detail__hero-status facility-detail__hero-status--${statusClass}`}>
-                <i className={`bi ${statusClass === 'open' ? 'bi-check-circle-fill' : statusClass === 'closed' ? 'bi-x-circle-fill' : 'bi-clock'}`}></i>
-                {statusLabel}
-              </span>
+              {!isReco ? (
+                <span className={`facility-detail__hero-status facility-detail__hero-status--${statusClass}`}>
+                  <i className={`bi ${statusClass === 'open' ? 'bi-check-circle-fill' : statusClass === 'closed' ? 'bi-x-circle-fill' : 'bi-clock'}`}></i>
+                  {statusLabel}
+                </span>
+              ) : (
+                <span className="facility-detail__hero-status facility-detail__hero-status--open">
+                  <i className="bi bi-stars"></i> Site proposé
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -204,6 +213,7 @@ function FacilityDetail({
           </div>
         )}
 
+        {!isReco && (
         <div className="facility-detail__info-section">
           <div className="facility-detail__info-row">
             <div className="facility-detail__info-icon"><i className="bi bi-geo-alt-fill"></i></div>
@@ -242,8 +252,9 @@ function FacilityDetail({
             </div>
           </div>
         </div>
+        )}
 
-        {feature.geometry?.coordinates && (
+        {!isReco && feature.geometry?.coordinates && (
           <a
             href={`https://www.google.com/maps?q=${feature.geometry.coordinates[1]},${feature.geometry.coordinates[0]}`}
             target="_blank"

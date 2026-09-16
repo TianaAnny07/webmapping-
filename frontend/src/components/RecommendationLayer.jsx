@@ -33,8 +33,8 @@ const siteIcon = new L.DivIcon({
       width: 40px;
       height: 40px;
       border-radius: 50%;
-      background: rgba(230, 126, 34, 0.25);
-      border: 2px solid rgba(230, 126, 34, 0.4);
+      background: rgba(245, 158, 11, 0.25);
+      border: 2px solid rgba(245, 158, 11, 0.4);
       animation: site-icon-pulse 1.5s ease-in-out infinite;
     "></div>
     <div style="
@@ -45,7 +45,7 @@ const siteIcon = new L.DivIcon({
       width: 28px;
       height: 28px;
       border-radius: 50%;
-      background: #E67E22;
+      background: #f59e0b;
       border: 3px solid white;
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
       display: flex;
@@ -53,7 +53,7 @@ const siteIcon = new L.DivIcon({
       justify-content: center;
       z-index: 1;
     ">
-      <i class="bi bi-lightbulb-fill" style="color:white; font-size: 14px;"></i>
+      <i class="bi bi-hospital-fill" style="color:white; font-size: 14px;"></i>
     </div>
   </div>`,
   className: '',

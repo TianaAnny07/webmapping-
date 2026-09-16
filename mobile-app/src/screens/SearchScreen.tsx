@@ -56,7 +56,11 @@ export default function SearchScreen() {
   const [filterOpen, setFilterOpen] = useState(false); // menu déroulant ouvert/fermé
 
   // Résultats après application du filtre (calcul local = instantané)
-  const filteredResults = useMemo(() => filterByType(results, filter), [results, filter]);
+  // Résultats filtrés, sans la catégorie « Autre formation sanitaire »
+  const filteredResults = useMemo(
+    () => filterByType(results, filter).filter((f) => f.category !== 'other'),
+    [results, filter],
+  );
 
   const loadNearby = useCallback(async () => {
     setLoading(true);
