@@ -1,3 +1,4 @@
+import React from 'react';
 import { View, ActivityIndicator, Image, TouchableOpacity, Text } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -24,7 +25,7 @@ const Tab = createBottomTabNavigator<TabParamList>();
 const TAB_ICONS: Record<string, [string, string]> = {
   Map: ['map', 'map-outline'],
   Search: ['search', 'search-outline'],
-  Measure: ['ruler', 'ruler-outline'],
+  Measure: ['resize', 'resize-outline'],
   Profile: ['person-circle', 'person-circle-outline'],
 };
 
@@ -35,30 +36,22 @@ const TAB_TITLES: Record<keyof TabParamList, string> = {
   Profile: 'Profil',
 };
 
-// Bouton SOS au MILIEU de la barre : rond, rouge, surélevé.
-// Le libellé « Urgence » reste du même style que les autres onglets.
+// Bouton URGENCE : même style neutre que les autres onglets,
+// icône type « pharmacie / trousse de soins » (croix médicale).
 function EmergencyTabButton() {
   const navigation = useNavigation<any>();
-  const { colors } = useTheme();
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-start' }}>
-      <TouchableOpacity
-        accessibilityLabel="Urgence"
-        style={{
-          width: 54, height: 54, borderRadius: 27, marginTop: -20,
-          backgroundColor: '#dc2626', borderWidth: 4, borderColor: colors.card,
-          alignItems: 'center', justifyContent: 'center',
-          elevation: 7, shadowColor: '#b91c1c', shadowOpacity: 0.5, shadowRadius: 8,
-        }}
-        onPress={() => {
-          navigation.navigate('Map');
-          setTimeout(() => emergencyBus.trigger(), 150);
-        }}
-      >
-        <Ionicons name="alert-circle" size={28} color="#fff" />
-      </TouchableOpacity>
-      <Text style={{ color: '#94a3b8', fontSize: 10.5, fontWeight: '600', marginTop: 3 }}>Urgence</Text>
-    </View>
+    <TouchableOpacity
+      accessibilityLabel="Urgence"
+      style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 6 }}
+      onPress={() => {
+        navigation.navigate('Map');
+        setTimeout(() => emergencyBus.trigger(), 150);
+      }}
+    >
+      <Ionicons name="medkit-outline" size={24} color="#94a3b8" />
+      <Text style={{ color: '#94a3b8', fontSize: 10.5, fontWeight: '600', marginTop: 2 }}>Urgence</Text>
+    </TouchableOpacity>
   );
 }
 

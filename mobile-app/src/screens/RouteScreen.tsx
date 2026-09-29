@@ -49,7 +49,7 @@ function bearingDeg(a: { latitude: number; longitude: number }, b: { latitude: n
 type Props = NativeStackScreenProps<RootStackParamList, 'Route'>;
 
 
-const OFF_ROUTE_THRESHOLD_M = 60;
+const OFF_ROUTE_THRESHOLD_M = 120;
 
 const ARRIVAL_THRESHOLD_M = 20;
 const STEP_ARRIVAL_THRESHOLD_M = 30;
@@ -74,8 +74,15 @@ export default function RouteScreen() {
   const [offRouteM, setOffRouteM] = useState<number | null>(null);
   const [arrived, setArrived] = useState(false);
   const [voiceOn, setVoiceOn] = useState(isVoiceEnabled());
-  const [recalculating, setRecalculating] = useState(false);
-  
+    const [recalculating, setRecalculating] = useState(false);
+  const [paused, setPaused] = useState(false); //  pause / reprise réelle
+  const [elapsedSec, setElapsedSec] = useState(0); //  temps passé en route (hors pause)
+  const [roadFactor, setRoadFactor] = useState(1.5); // réalité des routes malgaches
+  const pausedRef = useRef(false);
+    const prevPaused = useRef(false);
+  const preAnnouncedRef = useRef(false); // préannonce déjà faite pour cette étape
+  const wrongWayMs = useRef(0); // temps passé dans le mauvais sens
+  const lastWrongWarn = useRef(0); // dernier avertissement « mauvais sens »
   const [followMode, setFollowMode] = useState(true);
   const [simulating, setSimulating] = useState(false); // démo en salle
   const [heading, setHeading] = useState(270); // direction du trajet (degrés)
@@ -106,18 +113,38 @@ export default function RouteScreen() {
 
   // Annonce vocale au démarrage puis à chaque changement d'étape 
   
-  useEffect(() => {
-    if (!currentStep) return;
+    useEffect(() => {
+    if (!currentStep || pausedRef.current) return; //  silence pendant la pause
     const { text } = describeStep(currentStep, language);
     if (!hasGreeted.current) {
       hasGreeted.current = true;
       const name = user?.username?.trim();
-      const greeting = name ? `Bonjour ${name}. ` : 'Bonjour. ';
-      speak(`${greeting}${text}`);
+      const greeting = name ? `Bonjour ${name}, ` : 'Bonjour, ';
+      speak(`${greeting}je vous guide pour aller jusqu'à ${facility.name}. ${text}`);
     } else {
       speak(text);
     }
   }, [stepIndex]); 
+
+      //  la préannonce + le mauvais sens à chaque nouvelle étape
+  useEffect(() => {
+    preAnnouncedRef.current = false;
+    wrongWayMs.current = 0;
+  }, [stepIndex]);
+
+  // Chrono du temps réellement passé en route (gelé pendant la pause)
+  useEffect(() => {
+    if (arrived || paused) return;
+    const id = setInterval(() => setElapsedSec((sec) => sec + 1), 1000);
+    return () => clearInterval(id);
+  }, [paused, arrived]);
+
+  // Synchronise la pause + annonce la reprise
+  useEffect(() => {
+    pausedRef.current = paused;
+    if (prevPaused.current && !paused) speak('Navigation reprise, bonne route.');
+    prevPaused.current = paused;
+  }, [paused]);
 
   useEffect(() => {
     return () => {
@@ -129,14 +156,46 @@ export default function RouteScreen() {
 
   
   useEffect(() => {
-    watchPosition((coords) => {
+        watchPosition((coords) => {
+      // ⏸️ En pause : la position reste suivie, mais annonces et alertes sont figées
+      if (pausedRef.current) { setUserPos(coords); return; }
       // Oriente le 🚶 / 🏍️ / 🚗 vers la direction du trajet
-      if (lastPosRef.current) {
+            if (lastPosRef.current) {
         const dM =
           haversineKm(lastPosRef.current.latitude, lastPosRef.current.longitude, coords.latitude, coords.longitude) * 1000;
-        if (dM > 1) setHeading(bearingDeg(lastPosRef.current, coords));
+        if (dM > 1) {
+          const moveHeading = bearingDeg(lastPosRef.current, coords);
+          setHeading(moveHeading);
+
+          // MAUVAIS SENS : 
+          if (dM > 2 && currentStep) {
+            const target = bearingDeg(coords, { latitude: currentStep.location[0], longitude: currentStep.location[1] });
+            let diff = Math.abs(moveHeading - target);
+            if (diff > 180) diff = 360 - diff;
+            wrongWayMs.current = diff > 120 ? wrongWayMs.current + 4000 : 0;
+            if (wrongWayMs.current >= 8000 && Date.now() - lastWrongWarn.current > 30000) {
+              lastWrongWarn.current = Date.now();
+              wrongWayMs.current = 0;
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+              speak(t('nav_wrong_way_voice'));
+            }
+          } else if (dM > 2) {
+            wrongWayMs.current = 0;
+          }
+        }
       }
       lastPosRef.current = coords;
+
+      //  PRÉANNONCE : 150 m avant un tournant
+      if (currentStep && !preAnnouncedRef.current) {
+        const dStep =
+          haversineKm(coords.latitude, coords.longitude, currentStep.location[0], currentStep.location[1]) * 1000;
+        if (dStep <= 150 && dStep > 30) {
+          preAnnouncedRef.current = true;
+          const metres = Math.round(dStep / 50) * 50;
+          speak(`Dans environ ${metres} mètres : ${describeStep(currentStep, language).text.toLowerCase()}`);
+        }
+      }
       setUserPos(coords);
 
      
@@ -199,6 +258,16 @@ export default function RouteScreen() {
     }
   }, [userPos, facility, mode]);
 
+   // ⏸️ Pause / reprise de la navigation réelle
+  const handleTogglePause = () => {
+    if (!paused) {
+      stopSpeaking();
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      speak('Navigation en pause. Le temps de trajet est arrêté.');
+    }
+    setPaused((p) => !p);
+  };
+
   const handleToggleVoice = () => {
     const next = !voiceOn;
     setVoiceEnabled(next);
@@ -246,15 +315,18 @@ export default function RouteScreen() {
         onPanDrag={() => setFollowMode(false)}
       >
         <FloatingMarker coordinate={{ latitude: facility.latitude, longitude: facility.longitude }} category={facility.category} />
-        {/* Petit bonhomme / moto / voiture qui suit le trajet pendant la simulation */}
+        {/* Petit bonhomme / moto / voiture qui suit le trajet pendant la simulation.
+            - À pied : personnage toujours droit (jamais renversé).
+            - Moto / voiture : retourné horizontalement selon le sens (ouest/est), jamais la tête en bas. */}
         {simulating && userPos && (
           <Marker coordinate={userPos} anchor={{ x: 0.5, y: 0.5 }} zIndex={10} flat>
-            {/* Emoji seul (sans cercle), pivoté vers la direction du trajet */}
-            <View style={{ transform: [{ rotate: `${heading - 270}deg` }] }}>
-              <Text style={{ fontSize: 30 }}>
-                {mode === 'walking' ? '🚶' : mode === 'cycling' ? '🏍️' : '🚗'}
-              </Text>
-            </View>
+            {mode === 'walking' ? (
+              <Text style={{ fontSize: 30 }}>🚶</Text>
+            ) : (
+              <View style={{ transform: [{ scaleX: heading > 0 && heading < 180 ? -1 : 1 }] }}>
+                <Text style={{ fontSize: 30 }}>{mode === 'cycling' ? '🏍️' : '🚗'}</Text>
+              </View>
+            )}
           </Marker>
         )}
         {coords.length > 0 && (
@@ -319,18 +391,59 @@ export default function RouteScreen() {
         ) : (
           <>
             <Text style={[styles.destName, { color: colors.textPrimary }]}>{facility.name}</Text>
-            <Text style={[styles.routeInfo, { color: colors.textSecondary }]}>
-              {formatDistance(itinerary.distanceMeters)} · {formatDuration(itinerary.durationSeconds)} · {MODE_SPEEDS_KMH[mode]} {t('km_h')}
+                        <Text style={[styles.routeInfo, { color: colors.textSecondary }]}>
+              {formatDistance(itinerary.distanceMeters)} · {formatDuration(Math.round(itinerary.durationSeconds * roadFactor))} estimé réel · {MODE_SPEEDS_KMH[mode]} {t('km_h')}
             </Text>
+            <Text style={[styles.routeInfo, { color: paused ? '#f59e0b' : colors.textSecondary }]}>
+              ⏱️ Temps écoulé : {formatDuration(elapsedSec)}{paused ? ' · EN PAUSE' : ''}
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {[
+                { label: 'Route bonne', f: 1.2 },
+                { label: 'Route moyenne', f: 1.5 },
+                { label: 'Route difficile', f: 2 },
+              ].map((o) => (
+                <TouchableOpacity
+                  key={o.f}
+                  onPress={() => setRoadFactor(o.f)}
+                  style={{
+                    flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center',
+                    backgroundColor: roadFactor === o.f ? colors.accent : colors.bg,
+                    borderWidth: 1, borderColor: roadFactor === o.f ? colors.accent : colors.border,
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: roadFactor === o.f ? '#fff' : colors.textSecondary }}>
+                    {o.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
             <FacilityInfoCard facility={facility} compact />
-            <TouchableOpacity style={[styles.stopBtn, { backgroundColor: simulating ? '#f59e0b' : colors.accent }]} onPress={handleToggleSimulation}>
-              <Ionicons name={simulating ? 'pause-circle' : 'play-circle'} size={18} color="#fff" />
-              <Text style={styles.stopBtnText}>{simulating ? 'Arrêter la simulation' : 'Simuler le trajet'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.stopBtn, { backgroundColor: colors.danger }]} onPress={handleStop}>
-              <Ionicons name="stop-circle" size={18} color="#fff" />
-              <Text style={styles.stopBtnText}>{t('nav_stop')}</Text>
-            </TouchableOpacity>
+                                   {/* ⏸️ ▶️ ⛔ Les 3 boutons alignés sur une seule rangée, comme « état de la route » */}
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                style={[styles.stopBtn, { flex: 1, paddingVertical: 10, backgroundColor: paused ? '#22c55e' : '#64748b' }]}
+                onPress={handleTogglePause}
+              >
+                <Ionicons name={paused ? 'play-circle' : 'pause-circle'} size={16} color="#fff" />
+                <Text style={[styles.stopBtnText, { fontSize: 11 }]} numberOfLines={1}>
+                  {paused ? 'Reprendre' : 'Pause'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.stopBtn, { flex: 1, paddingVertical: 10, backgroundColor: simulating ? '#f59e0b' : colors.accent }]}
+                onPress={handleToggleSimulation}
+              >
+                <Ionicons name={simulating ? 'pause-circle' : 'play-circle'} size={16} color="#fff" />
+                <Text style={[styles.stopBtnText, { fontSize: 11 }]} numberOfLines={1}>
+                  {simulating ? 'Stop démo' : 'Simuler'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.stopBtn, { flex: 1, paddingVertical: 10, backgroundColor: colors.danger }]} onPress={handleStop}>
+                <Ionicons name="stop-circle" size={16} color="#fff" />
+                <Text style={[styles.stopBtnText, { fontSize: 11 }]} numberOfLines={1}>Arrêter</Text>
+              </TouchableOpacity>
+            </View>
           </>
         )}
       </View>

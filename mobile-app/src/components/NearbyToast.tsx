@@ -1,13 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, PanResponder, ScrollView, Dimensions } from 'react-native';
+import {
+  View, Text, TouchableOpacity, StyleSheet, Animated, PanResponder, ScrollView,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CATEGORY_META, FacilityCategory } from '../services/facilityCategories';
+import { isOpenNow } from '../services/openingHours';
 
 // Élément d'un établissement affiché dans la notification.
 export interface NearbyToastItem {
   name: string;
   category: FacilityCategory;
   distanceKm?: number;
+  openingTime?: string;
+  closingTime?: string;
+  is24h?: boolean;
 }
 
 interface Props {
@@ -18,22 +24,20 @@ interface Props {
   onItemPress: (index: number) => void;
 }
 
-
 export default function NearbyToast({ visible, greetingName, items, onClose, onItemPress }: Props) {
-  const [expanded, setExpanded] = useState(false); // compact ou allongé
+  const [expanded, setExpanded] = useState(false);
   const slideY = useRef(new Animated.Value(-400)).current;
 
-  // Animation d'entrée (depuis le haut) à chaque fois que le toast devient visible.
   useEffect(() => {
     if (visible) {
-      setExpanded(false); // on rouvre toujours en compact
+      setExpanded(false);
       Animated.spring(slideY, { toValue: 0, useNativeDriver: true, bounciness: 8, speed: 12 }).start();
     } else {
       Animated.timing(slideY, { toValue: -400, duration: 200, useNativeDriver: true }).start();
     }
   }, [visible, slideY]);
 
-  // Glisser le toast vers le haut pour le fermer (gardé simple).
+  // Glisser l'en-tête vers le haut pour fermer
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, g) => g.dy < -12,
@@ -49,11 +53,8 @@ export default function NearbyToast({ visible, greetingName, items, onClose, onI
   const summary = `${items.length} établissement${items.length > 1 ? 's' : ''} à proximité`;
 
   return (
-    <Animated.View
-      style={[styles.toast, { transform: [{ translateY: slideY }, { translateY: '-50%' }] }]}
-    >
-      {/* En-tête : salutation + actions (réduire/allonger, fermer) */}
-      {/* Le glisser-pour-fermer est limité à l'en-tête pour ne pas gêner le scroll */}
+    <Animated.View style={[styles.toast, { transform: [{ translateY: slideY }] }]}>
+      {/* En-tête (toucher pour déplier / replier) */}
       <TouchableOpacity
         {...panResponder.panHandlers}
         style={styles.header}
@@ -65,10 +66,7 @@ export default function NearbyToast({ visible, greetingName, items, onClose, onI
           <Text style={styles.summary}>{expanded ? summary : 'Toucher pour voir le détail'}</Text>
         </View>
         <View style={styles.headerActions}>
-          <TouchableOpacity
-            onPress={() => setExpanded((e) => !e)}
-            style={styles.iconBtn}
-          >
+          <TouchableOpacity onPress={() => setExpanded((e) => !e)} style={styles.iconBtn}>
             <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color="#1e293b" />
           </TouchableOpacity>
           <TouchableOpacity onPress={onClose} style={styles.iconBtn}>
@@ -77,11 +75,18 @@ export default function NearbyToast({ visible, greetingName, items, onClose, onI
         </View>
       </TouchableOpacity>
 
-      {/* Liste des établissements (visible seulement quand allongé, scrollable) */}
+      {/* Liste SCROLLABLE, centrée à l'écran */}
       {expanded && (
-        <ScrollView style={styles.list} showsVerticalScrollIndicator={true}>
+        <ScrollView
+          style={styles.list}
+          showsVerticalScrollIndicator={true}
+          nestedScrollEnabled={true}
+          bounces={true}
+          scrollEnabled={true}
+        >
           {items.map((item, index) => {
-            const meta = CATEGORY_META[item.category] || CATEGORY_META.other;
+            const meta = CATEGORY_META[item.category];
+            const open = isOpenNow(item.openingTime, item.closingTime, item.is24h);
             return (
               <TouchableOpacity
                 key={`${item.name}-${index}`}
@@ -91,10 +96,22 @@ export default function NearbyToast({ visible, greetingName, items, onClose, onI
                 <View style={[styles.itemIcon, { backgroundColor: meta.color + '22' }]}>
                   <Ionicons name={meta.icon as any} size={16} color={meta.color} />
                 </View>
-                <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-                <View style={styles.itemTag}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
                   <Text style={[styles.itemTagText, { color: meta.color }]}>{meta.label}</Text>
                 </View>
+                {open !== null && (
+                  <View
+                    style={{
+                      borderRadius: 10, paddingHorizontal: 7, paddingVertical: 3,
+                      backgroundColor: open ? 'rgba(34,197,94,.15)' : 'rgba(239,68,68,.15)',
+                    }}
+                  >
+                    <Text style={{ fontSize: 9.5, fontWeight: '800', color: open ? '#16a34a' : '#dc2626' }}>
+                      {open ? 'Ouvert' : 'Fermé'}
+                    </Text>
+                  </View>
+                )}
                 {item.distanceKm != null && (
                   <Text style={styles.itemDist}>
                     {item.distanceKm < 1 ? `${(item.distanceKm * 1000).toFixed(0)} m` : `${item.distanceKm.toFixed(1)} km`}
@@ -111,11 +128,11 @@ export default function NearbyToast({ visible, greetingName, items, onClose, onI
 
 const styles = StyleSheet.create({
   toast: {
-  position: 'absolute', alignSelf: 'center', top: '50%', // centré à l'écran
-  width: '90%', maxWidth: 420, zIndex: 40,               // centré horizontalement
-  backgroundColor: '#ffffff', borderRadius: 16, padding: 14,
-  elevation: 10, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 10,
-},
+       position: 'absolute', alignSelf: 'center', top: '28%',// un peu au milieu de l'écran
+    width: '92%', maxWidth: 440, zIndex: 40,
+    backgroundColor: '#ffffff', borderRadius: 16, padding: 14,
+    elevation: 10, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 10,
+  },
   header: { flexDirection: 'row', alignItems: 'center' },
   headerText: { flex: 1 },
   greeting: { fontSize: 15, fontWeight: '800', color: '#1e293b' },
@@ -127,16 +144,11 @@ const styles = StyleSheet.create({
   },
   list: {
     marginTop: 12, borderTopWidth: 1, borderTopColor: '#eef2f7', paddingTop: 8,
-    // hauteur max = 55% de l'écran : on peut toujours scroller jusqu'en bas
-    maxHeight: Math.round(Dimensions.get('window').height * 0.55),
+    maxHeight: 320, // hauteur max => scroll quand il y a beaucoup d'établissements
   },
-  item: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
-  itemIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  itemName: { flex: 1, fontSize: 13, fontWeight: '600', color: '#1e293b' },
-  itemTag: {
-    borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
-    backgroundColor: '#f1f5f9', marginLeft: 4,
-  },
-  itemTagText: { fontSize: 10, fontWeight: '700' },
-  itemDist: { fontSize: 12, fontWeight: '700', color: '#6DBE45', minWidth: 44, textAlign: 'right' },
+  item: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9 },
+  itemIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  itemName: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
+  itemTagText: { fontSize: 10, fontWeight: '700', marginTop: 1 },
+  itemDist: { fontSize: 12, fontWeight: '800', color: '#6DBE45', minWidth: 46, textAlign: 'right' },
 });

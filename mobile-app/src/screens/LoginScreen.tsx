@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
@@ -43,10 +43,17 @@ export default function LoginScreen() {
       style={[styles.container, { backgroundColor: colors.bg }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={styles.brand}>
-        <Ionicons name="heart-circle" size={56} color={colors.accent} />
-        <Text style={[styles.brandTitle, { color: colors.textPrimary }]}>Santé Madagascar</Text>
-        <Text style={[styles.brandSub, { color: colors.textSecondary }]}>Connectez-vous pour continuer</Text>
+            <View style={styles.brand}>
+        
+        <Image
+          source={require('../assets/Logo.png')}
+          style={{ width: 120, height: 104, borderRadius: 22, marginBottom: 8 }}
+          resizeMode="contain"
+        />
+        <Text style={[styles.brandTitle, { color: colors.textPrimary }]}>SantéGéo MG</Text>
+        <Text style={[styles.brandSub, { color: colors.textSecondary }]}>
+          Localisez les soins de santé, où que vous soyez.
+        </Text>
       </View>
 
       {error !== '' && (

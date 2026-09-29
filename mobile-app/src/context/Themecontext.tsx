@@ -33,10 +33,25 @@ const DARK: Palette = {
   accent: '#2dd9b6',
   danger: '#f87171',
 };
+const GREEN: Palette = { bg: '#e8f5e9', card: '#ffffff', input: '#eef7ee', textPrimary: '#1b3a26', textSecondary: '#587a68', border: '#cfe8d4', accent: '#22a06b', danger: '#ef4444' };
+const BLUE: Palette = { bg: '#eaf2fb', card: '#ffffff', input: '#eef4fb', textPrimary: '#16283f', textSecondary: '#5a7188', border: '#d3e3f4', accent: '#2563eb', danger: '#ef4444' };
+
+export type ThemeId = 'light' | 'dark' | 'green' | 'blue';
+
+export const THEME_LIST: { id: ThemeId; label: string; swatch: string }[] = [
+  { id: 'light', label: 'Clair', swatch: '#f4f7f6' },
+  { id: 'dark', label: 'Sombre', swatch: '#0d1b24' },
+  { id: 'green', label: 'Vert doux', swatch: '#e8f5e9' },
+  { id: 'blue', label: 'Bleu doux', swatch: '#eaf2fb' },
+];
+
+const PALETTES: Record<ThemeId, Palette> = { light: LIGHT, dark: DARK, green: GREEN, blue: BLUE };
 
 interface ThemeContextValue {
+  theme: ThemeId;
   isDark: boolean;
   colors: Palette;
+  setTheme: (t: ThemeId) => void;
   toggleTheme: () => void;
 }
 
@@ -44,23 +59,31 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 const STORAGE_KEY = 'theme-preference';
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [isDark, setIsDark] = useState(false);
+  const [theme, setThemeState] = useState<ThemeId>('light');
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((v) => {
-      if (v === 'dark') setIsDark(true);
+      if (v && PALETTES[v as ThemeId]) setThemeState(v as ThemeId);
     });
   }, []);
 
+  const setTheme = useCallback((t: ThemeId) => {
+    setThemeState(t);
+    AsyncStorage.setItem(STORAGE_KEY, t);
+  }, []);
+
   const toggleTheme = useCallback(() => {
-    setIsDark((prev) => {
-      const next = !prev;
-      AsyncStorage.setItem(STORAGE_KEY, next ? 'dark' : 'light');
+    setThemeState((prev) => {
+      const next: ThemeId = prev === 'dark' ? 'light' : 'dark';
+      AsyncStorage.setItem(STORAGE_KEY, next);
       return next;
     });
   }, []);
 
-  const value = useMemo(() => ({ isDark, colors: isDark ? DARK : LIGHT, toggleTheme }), [isDark, toggleTheme]);
+  const value = useMemo(
+    () => ({ theme, isDark: theme === 'dark', colors: PALETTES[theme], setTheme, toggleTheme }),
+    [theme, setTheme, toggleTheme],
+  );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

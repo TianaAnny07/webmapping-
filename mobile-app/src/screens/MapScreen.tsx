@@ -15,9 +15,12 @@ import { useAuth } from '../context/AuthContext';
 import NearbyToast, { NearbyToastItem } from '../components/NearbyToast';
 import { useLanguage } from '../context/LanguageContext';
 import FloatingMarker from '../components/FloatingMarker';
+import BaseMapPicker, { BaseMapType } from '../components/BaseMapPicker';
 import RegionCountMarker from '../components/RegionCountMarker';
 import MapLegend from '../components/MapLegend';
 import LocationWeatherBar from '../components/LocationWeatherBar';
+
+
 import { emergencyBus } from '../services/emergencyBus';
 import { isOpenNow, openLabel } from '../services/openingHours';
 import { CATEGORY_META, CATEGORY_ORDER, FacilityCategory } from '../services/facilityCategories';
@@ -27,8 +30,6 @@ const NEARBY_MAX_COUNT = 15;
 const MAX_GUARANTEE_KM = 100;
 const MADAGASCAR_REGION = { latitude: -18.9, longitude: 47.0, latitudeDelta: 8, longitudeDelta: 8 };
 
-// Toutes les catégories de la légende sont garanties dans « près de moi » :
-// il y aura toujours au moins l'établissement le plus proche de chaque type.
 function bucketOf(category: FacilityCategory): FacilityCategory {
   return category;
 }
@@ -43,6 +44,7 @@ export default function MapScreen() {
   const [hasNotifications, setHasNotifications] = useState(false); // la cloche reste visible
   const { t } = useLanguage();
   const mapRef = useRef<MapView>(null);
+   const [mapType, setMapType] = useState<BaseMapType>('standard');
 
   const [regionCounts, setRegionCounts] = useState<RegionCount[]>([]);
   const [loadingRegions, setLoadingRegions] = useState(true);
@@ -58,8 +60,12 @@ export default function MapScreen() {
   const [searchCollapsed, setSearchCollapsed] = useState(false);
 
   // Mode URGENCE : déclenché par le bouton rouge de la barre de navigation
-  const [emergency, setEmergency] = useState<{ facility: Facility; distKm: number } | null>(null);
+  const [emergency, setEmergency] = useState<{
+    hospital?: { facility: Facility; distKm: number };
+    pharmacy?: { facility: Facility; distKm: number };
+  } | null>(null);
   const [emergencyBusy, setEmergencyBusy] = useState(false);
+  const [covMsg, setCovMsg] = useState<{ text: string; color: string } | null>(null);
 
   // Compteurs par région (bulles sur la carte) + fin du cercle de chargement
   useEffect(() => {
@@ -122,7 +128,14 @@ export default function MapScreen() {
       // Notification : toujours les 8 catégories (la distance est affichée à côté)
       const matchAny = withDist.find(({ f }) => bucketOf(f.category) === bucket);
       if (matchAny) {
-        guaranteed.push({ name: matchAny.f.name, category: matchAny.f.category, distanceKm: matchAny.distKm });
+        guaranteed.push({
+          name: matchAny.f.name,
+          category: matchAny.f.category,
+          distanceKm: matchAny.distKm,
+          openingTime: matchAny.f.openingTime,
+          closingTime: matchAny.f.closingTime,
+          is24h: matchAny.f.is24h,
+        });
       }
     });
     for (const { f } of withDist) {
@@ -159,12 +172,21 @@ export default function MapScreen() {
         .map((f) => ({ f, d: haversineKm(pos.latitude, pos.longitude, f.latitude, f.longitude) }))
         .sort((a, b) => a.d - b.d);
       const open = withDist.filter(({ f }) => isOpenNow(f.openingTime, f.closingTime, f.is24h) !== false);
-      const best = (open.length > 0 ? open : withDist)[0];
-      if (!best) return;
-      setEmergency({ facility: best.f, distKm: Math.round(best.d * 10) / 10 });
+      const source = open.length > 0 ? open : withDist;
+      // Un HÔPITAL ouvert + une PHARMACIE ouverte, les plus proches
+      const hospital = source.find(({ f }) => f.category === 'hospital' || f.category === 'chu');
+      const pharmacy = source.find(({ f }) => f.category === 'pharmacy');
+      if (!hospital && !pharmacy) return;
+            setEmergency({
+        hospital: hospital ? { facility: hospital.f, distKm: hospital.d } : undefined,
+        pharmacy: pharmacy ? { facility: pharmacy.f, distKm: pharmacy.d } : undefined,
+      });
       setShowIndividualMarkers(true);
-      setHighlightedFacility(best.f);
-      centerOn(best.f.latitude, best.f.longitude, 15);
+      const first = hospital ?? pharmacy;
+      if (first) {
+        setHighlightedFacility(first.f);
+        centerOn(first.f.latitude, first.f.longitude, 14);
+      }
     } catch {
       /* silencieux */
     } finally {
@@ -172,21 +194,41 @@ export default function MapScreen() {
     }
   }, [centerOn, emergencyBusy]);
 
-  const handleEmergencyRoute = async () => {
-    if (!emergency) return;
+  const handleEmergencyRoute = async (facility: Facility) => {
     try {
       const pos = await getCurrentPosition();
       const itin = await getItinerary(
         pos.latitude,
         pos.longitude,
-        emergency.facility.latitude,
-        emergency.facility.longitude,
+        facility.latitude,
+        facility.longitude,
         'driving',
       );
-      navigation.navigate('Route', { facility: emergency.facility, mode: 'driving', itinerary: itin });
+      navigation.navigate('Route', { facility, mode: 'driving', itinerary: itin });
     } catch {
       /* silencieux */
     }
+  };
+
+  const distLabel = (d: number) => (d < 1 ? `${Math.round(d * 1000)} m` : `${d.toFixed(1)} km`);
+    // Fermer l'urgence → la carte revient comme au début (Madagascar entier)
+   // Fermer l'urgence → la carte revient sur MA POSITION ACTUELLE
+  const closeEmergency = () => {
+    setEmergency(null);
+    setHighlightedFacility(null);
+    (async () => {
+      try {
+        const pos = await getCurrentPosition();
+        setShowIndividualMarkers(true);
+        centerOn(pos.latitude, pos.longitude, 15);
+      } catch {
+        setShowIndividualMarkers(false);
+        mapRef.current?.setCamera({
+          center: { latitude: MADAGASCAR_REGION.latitude, longitude: MADAGASCAR_REGION.longitude },
+          zoom: 6,
+        });
+      }
+    })();
   };
 
   // Le bouton rouge de la navbar déclenche handleEmergency
@@ -256,7 +298,8 @@ export default function MapScreen() {
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFill}
-        provider={PROVIDER_GOOGLE}
+                provider={PROVIDER_GOOGLE}
+        mapType={mapType}
         initialRegion={MADAGASCAR_REGION}
         showsUserLocation
         showsMyLocationButton={false}
@@ -292,7 +335,9 @@ export default function MapScreen() {
             onPress={() => navigation.navigate('FacilityDetail', { facility: highlightedFacility })}
           />
         )}
-      </MapView>
+            </MapView>
+
+      <BaseMapPicker value={mapType} onChange={setMapType} />
 
       {loadingRegions && (
         <View style={[styles.loadingBadge, { backgroundColor: colors.card }]}>
@@ -340,32 +385,61 @@ export default function MapScreen() {
       )}
 
       {/* Barre position + température + couverture (comme l'en-tête web) */}
-      <LocationWeatherBar />
+      <LocationWeatherBar onCovMsg={setCovMsg} />
 
-      {/* Bandeau URGENCE : centre ouvert le plus proche + itinéraire 1 clic */}
+      {/* Bandeau URGENCE : hôpital + pharmacie ouverts les plus proches */}
       {emergency && (
         <View style={styles.emergencyBanner}>
-          <Text style={styles.emergencyTitle} numberOfLines={1}>
-            🚨 {emergency.facility.name}
-          </Text>
-          <Text style={styles.emergencySub}>
-            {openLabel(emergency.facility.openingTime, emergency.facility.closingTime, emergency.facility.is24h)}
-            {' · à '}
-            {emergency.distKm < 1 ? `${Math.round(emergency.distKm * 1000)} m` : `${emergency.distKm} km`}
-          </Text>
-          <View style={styles.emergencyActions}>
-            <TouchableOpacity style={styles.emergencyGo} onPress={handleEmergencyRoute}>
-              <Ionicons name="navigate" size={14} color="#fff" />
-              <Text style={styles.emergencyGoText}>Itinéraire</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setEmergency(null)} style={styles.emergencyClose}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={styles.emergencyTitle}>🚨 Urgence</Text>
+                        <TouchableOpacity onPress={closeEmergency} style={styles.emergencyClose}>
               <Ionicons name="close" size={16} color="#fff" />
             </TouchableOpacity>
           </View>
+
+          {emergency.hospital && (
+            <View style={styles.emergencyRow}>
+              <Ionicons name="medkit" size={18} color="#fff" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.emergencyName} numberOfLines={1}>{emergency.hospital.facility.name}</Text>
+                <Text style={styles.emergencySub}>
+                  {openLabel(emergency.hospital.facility.openingTime, emergency.hospital.facility.closingTime, emergency.hospital.facility.is24h)}
+                  {' · '}{distLabel(emergency.hospital.distKm)}
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.emergencyGo} onPress={() => handleEmergencyRoute(emergency.hospital!.facility)}>
+                <Ionicons name="navigate" size={14} color="#fff" />
+                <Text style={styles.emergencyGoText}>Itinéraire</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {emergency.pharmacy && (
+            <View style={styles.emergencyRow}>
+              <Ionicons name="flask" size={18} color="#fff" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.emergencyName} numberOfLines={1}>{emergency.pharmacy.facility.name}</Text>
+                <Text style={styles.emergencySub}>
+                  {openLabel(emergency.pharmacy.facility.openingTime, emergency.pharmacy.facility.closingTime, emergency.pharmacy.facility.is24h)}
+                  {' · '}{distLabel(emergency.pharmacy.distKm)}
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.emergencyGo} onPress={() => handleEmergencyRoute(emergency.pharmacy!.facility)}>
+                <Ionicons name="navigate" size={14} color="#fff" />
+                <Text style={styles.emergencyGoText}>Itinéraire</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       )}
 
       <View style={styles.searchWrap}>
+        {covMsg ? (
+          <View style={{ borderRadius: 14, padding: 12, backgroundColor: covMsg.color, elevation: 6 }}>
+            <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>{covMsg.text}</Text>
+          </View>
+        ) : (
+        <>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <View style={{ flex: 1 }}>
             {searchCollapsed ? (
@@ -396,15 +470,17 @@ export default function MapScreen() {
             )}
           </View>
 
-          {/* Cloche de notification à côté de la barre de recherche */}
-          <TouchableOpacity style={[styles.bellInline, { backgroundColor: colors.card }]} onPress={handleBellPress}>
-            <Ionicons name="notifications" size={20} color="#6DBE45" />
-            {notifCount > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{notifCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          {/* Cloche : apparaît seulement quand la notification est arrivée (5 s après la position) */}
+          {hasNotifications && (
+            <TouchableOpacity style={[styles.bellInline, { backgroundColor: colors.card }]} onPress={handleBellPress}>
+              <Ionicons name="notifications" size={20} color="#6DBE45" />
+              {notifCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{notifCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
 
         {searchError !== '' && (
@@ -439,15 +515,20 @@ export default function MapScreen() {
             />
           </View>
         )}
+        </>
+        )}
       </View>
 
       <TouchableOpacity style={[styles.locateBtn, { backgroundColor: colors.card }]} onPress={locateMe}>
         <Ionicons name="locate" size={22} color={colors.textPrimary} />
       </TouchableOpacity>
 
-      <View style={styles.legendWrap}>
+       <View style={styles.legendWrap}>
         <MapLegend />
       </View>
+
+      {/* Cadre pour choisir le fond du mobile */}
+      
     </View>
   );
 }
@@ -456,8 +537,8 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   locateBtn: { position: 'absolute', bottom: 30, right: 20, padding: 12, borderRadius: 30, elevation: 4, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 4 },
   // Cloche de notification collée à la barre de recherche
-  bellInline: {
-    width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
+    bellInline: {
+    width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
     elevation: 5, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6,
   },
   badge: {
@@ -481,8 +562,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#dc2626', borderRadius: 14, padding: 12,
     elevation: 6, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 6,
   },
-  emergencyTitle: { color: '#fff', fontWeight: '800', fontSize: 14 },
-  emergencySub: { color: '#fecaca', fontSize: 12, marginTop: 2 },
+  emergencyTitle: { color: '#fff', fontWeight: '800', fontSize: 14, flex: 1 },
+  emergencySub: { color: '#fecaca', fontSize: 11, marginTop: 2 },
+  emergencyRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
+  emergencyName: { color: '#fff', fontWeight: '800', fontSize: 13 },
   emergencyActions: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
   emergencyGo: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
@@ -491,9 +574,9 @@ const styles = StyleSheet.create({
   },
   emergencyGoText: { color: '#fff', fontWeight: '700', fontSize: 12 },
   emergencyClose: { padding: 6 },
-  searchBar: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, elevation: 5, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6 },
+   searchBar: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 14, paddingHorizontal: 14, height: 48, elevation: 5, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6 },
   searchInput: { flex: 1, fontSize: 13.5 },
-  searchChip: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10, maxWidth: '80%', elevation: 5, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6 },
+    searchChip: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 14, height: 48, maxWidth: '80%', elevation: 5, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6 },
   searchChipText: { fontSize: 13, fontWeight: '600', flexShrink: 1 },
   resultsBox: { borderRadius: 14, marginTop: 8, maxHeight: 260, elevation: 5, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6, overflow: 'hidden' },
   resultRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 11 },
@@ -502,3 +585,9 @@ const styles = StyleSheet.create({
   resultGo: { padding: 4 },
   legendWrap: { position: 'absolute', bottom: 30, left: 16 },
 });
+
+
+
+
+
+     

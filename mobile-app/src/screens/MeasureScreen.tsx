@@ -6,7 +6,7 @@ import { haversineKm, formatDistance } from '../services/Geo';
 import { Itinerary, TravelMode } from '../types';
 import DistanceMeasurePanel from '../components/DistanceMeasurePanel';
 import { useTheme } from '../context/Themecontext';
-
+import BackButton from '../components/BackButton';
 const INITIAL_REGION = { latitude: -18.9, longitude: 47.0, latitudeDelta: 8, longitudeDelta: 8 };
 
 
@@ -112,8 +112,9 @@ mapRef.current?.setCamera({ center: { latitude: centerLat, longitude: centerLon 
     ? { latitude: (pointA.latitude + pointB.latitude) / 2, longitude: (pointA.longitude + pointB.longitude) / 2 }
     : null;
 
-  return (
+   return (
     <View style={styles.container}>
+      <BackButton />
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFill}
@@ -170,7 +171,7 @@ mapRef.current?.setCamera({ center: { latitude: centerLat, longitude: centerLon 
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  panelWrap: { position: 'absolute', top: 55, left: 16, right: 16, zIndex: 20 },
+   panelWrap: { position: 'absolute', top: 55, left: 68, right: 16, zIndex: 20 },
   distanceBadge: {
     backgroundColor: '#1e293b', paddingHorizontal: 10, paddingVertical: 4,
     borderRadius: 999, borderWidth: 2,

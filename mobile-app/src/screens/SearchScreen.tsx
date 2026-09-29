@@ -1,3 +1,4 @@
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -5,23 +6,33 @@ import { useNavigation } from '@react-navigation/native';
 import { searchFacilities, getNearbyFacilities } from '../services/api';
 import { getCurrentPosition, requestLocationPermission } from '../services/location';
 import { Facility, FacilityType } from '../types';
+import { CATEGORY_ORDER, FacilityCategory } from '../services/facilityCategories';
 import { useTheme } from '../context/Themecontext';
-import { CATEGORY_META, CATEGORY_ORDER, FacilityCategory } from '../services/facilityCategories';
+import BackButton from '../components/BackButton';
+// Types affichés dans le menu déroulant du filtre, avec leur icône.
+type FilterId = 'all' | 'hospital' | 'csb' | 'pharmacy' | 'clinic' | 'other';
 
-// Filtres = les 8 catégories sanitaires de la légende (+ « Tous »).
-const FILTERS: { id: FacilityCategory | 'all'; label: string; icon: string; color: string }[] = [
+const FILTERS: { id: FilterId; label: string; icon: string; color: string }[] = [
   { id: 'all', label: 'Tous', icon: 'apps', color: '#00c9a7' },
-  ...CATEGORY_ORDER.map((c) => ({
-    id: c,
-    label: CATEGORY_META[c].label,
-    icon: CATEGORY_META[c].icon as string,
-    color: CATEGORY_META[c].color,
-  })),
+  { id: 'hospital', label: 'Hôpital / CHU / Maternité', icon: 'medkit', color: '#e74c3c' },
+  { id: 'csb', label: 'CSB', icon: 'person', color: '#2980b9' },
+  { id: 'pharmacy', label: 'Pharmacie', icon: 'flask', color: '#27ae60' },
+  { id: 'clinic', label: 'Clinique', icon: 'business', color: '#8e44ad' },
+  { id: 'other', label: 'Autres formations sanitaires', icon: 'add-circle', color: '#7f8c8d' },
 ];
 
-function filterByType(list: Facility[], type: FacilityCategory | 'all'): Facility[] {
-  if (type === 'all') return list;
-  return list.filter((f) => f.category === type);
+const FILTER_GROUPS: Record<FilterId, FacilityCategory[]> = {
+  all: CATEGORY_ORDER,
+  hospital: ['chu', 'hospital', 'maternity'],
+  csb: ['csb1', 'csb2'],
+  pharmacy: ['pharmacy'],
+  clinic: ['clinic'],
+  other: ['dentist', 'other'],
+};
+
+function filterByType(list: Facility[], type: FilterId): Facility[] {
+  const group = FILTER_GROUPS[type];
+  return list.filter((f) => group.includes(f.category));
 }
 
 function fTypeIcon(type: FacilityType): string {
@@ -52,15 +63,11 @@ export default function SearchScreen() {
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<'search' | 'nearby'>('nearby');
   const [geoError, setGeoError] = useState('');
-  const [filter, setFilter] = useState<FacilityCategory | 'all'>('all'); // filtre sélectionné
+  const [filter, setFilter] = useState<FilterId>('all'); // filtre sélectionné
   const [filterOpen, setFilterOpen] = useState(false); // menu déroulant ouvert/fermé
 
   // Résultats après application du filtre (calcul local = instantané)
-  // Résultats filtrés, sans la catégorie « Autre formation sanitaire »
-  const filteredResults = useMemo(
-    () => filterByType(results, filter).filter((f) => f.category !== 'other'),
-    [results, filter],
-  );
+  const filteredResults = useMemo(() => filterByType(results, filter), [results, filter]);
 
   const loadNearby = useCallback(async () => {
     setLoading(true);
@@ -98,9 +105,10 @@ export default function SearchScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
-  return (
+    return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
-      <View style={[styles.searchBar, { backgroundColor: colors.card }]}>
+      <BackButton />
+      <View style={[styles.searchBar, { backgroundColor: colors.card, marginLeft: 52 }]}>
         <Ionicons name="search" size={18} color={colors.textSecondary} />
         <TextInput
           style={[styles.input, { color: colors.textPrimary }]}
